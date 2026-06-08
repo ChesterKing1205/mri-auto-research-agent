@@ -13,4 +13,3 @@ def merge_project_config(config: dict | None) -> dict:
     if config:
         merged.update(config)
     return merged
-

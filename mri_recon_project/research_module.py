@@ -21,24 +21,39 @@ class ResearchModule(nn.Module):
         )
 
     def train_batch(self, batch: dict[str, Any]) -> dict[str, Any]:
-        pred = self._predict(batch)
-        target = batch["target_image"].to(pred.device)
-        loss = reconstruction_loss(pred, target)
+        pred, pred_normalized, target_normalized = self._predict_with_training_target(batch)
+        loss = reconstruction_loss(pred_normalized, target_normalized)
         return {"loss": loss, "pred_image": pred, "logs": {"l1": loss.detach()}}
 
     def validate_batch(self, batch: dict[str, Any]) -> dict[str, Any]:
-        pred = self._predict(batch)
-        target = batch["target_image"].to(pred.device)
-        loss = reconstruction_loss(pred, target)
+        pred, pred_normalized, target_normalized = self._predict_with_training_target(batch)
+        loss = reconstruction_loss(pred_normalized, target_normalized)
         return {"loss": loss, "pred_image": pred, "logs": {"l1": loss.detach()}}
 
     def configure_optimizers(self):
         return build_optimizer(self.parameters(), float(self.config["learning_rate"]))
 
     def _predict(self, batch: dict[str, Any]) -> torch.Tensor:
-        # Baseline starts from normalized zero-filled magnitude image supplied by the fixed harness.
+        # Baseline receives the undersampled magnitude image and predicts a clean magnitude image.
         image = batch["zero_filled_image"].to(next(self.parameters()).device)
-        return self.model(image)
+        normalized, mean, std = _normalize_image(image)
+        pred_normalized = self.model(normalized)
+        return torch.clamp(pred_normalized * std + mean, min=0.0)
+
+    def _predict_with_training_target(self, batch: dict[str, Any]) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        image = batch["zero_filled_image"].to(next(self.parameters()).device)
+        target = batch["target_image"].to(image.device)
+        normalized, mean, std = _normalize_image(image)
+        pred_normalized = self.model(normalized)
+        target_normalized = (target - mean) / std
+        pred = torch.clamp(pred_normalized * std + mean, min=0.0)
+        return pred, pred_normalized, target_normalized
+
+
+def _normalize_image(image: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    mean = image.mean(dim=(-2, -1), keepdim=True)
+    std = image.std(dim=(-2, -1), keepdim=True).clamp_min(1e-6)
+    return (image - mean) / std, mean, std
 
 
 def build_research_module(config: dict[str, Any] | None = None) -> ResearchModule:

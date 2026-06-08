@@ -45,6 +45,7 @@ def test_dataset_reads_required_fields_without_cache(tmp_path):
     assert sample["masked_kspace"].shape[-1] == 2
     assert sample["full_kspace"].shape[-3:-1] == (320, 320)
     assert sample["target_image"].shape == (1, 320, 320)
+    assert sample["zero_filled_image"].shape == (1, 320, 320)
     assert sample["normalization_info"]["scale"].item() > 0
     assert sample["fname"] == "train.h5"
 
