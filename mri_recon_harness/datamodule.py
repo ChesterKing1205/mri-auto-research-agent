@@ -38,6 +38,9 @@ class FastMRISliceDataset(Dataset):
         if kspace.shape[-3:-1] != (320, 320):
             kspace = standardize_kspace(kspace.unsqueeze(0)).squeeze(0)
 
+        full_image = ifft2c(kspace.unsqueeze(0)).squeeze(0)
+        zero_filled_target = rss(full_image.unsqueeze(0), dim=1).squeeze(0)
+
         target_image = torch.from_numpy(target).float()
         target_image = center_crop_real(target_image, (320, 320)).unsqueeze(0)
         scale = target_image.max().clamp_min(1e-6)
@@ -48,16 +51,14 @@ class FastMRISliceDataset(Dataset):
         mask = mask_1d.view(1, 1, width, 1).expand(kspace.shape[0], kspace.shape[1], width, 2)
         masked_kspace = kspace * mask
 
-        zero_filled_coils = ifft2c(masked_kspace.unsqueeze(0)).squeeze(0)
-        zero_filled_image = rss(zero_filled_coils.unsqueeze(0), dim=1).squeeze(0)
-        zero_filled_image = center_crop_real(zero_filled_image, (320, 320)).unsqueeze(0) / scale
+        zero_filled_target = center_crop_real(zero_filled_target, (320, 320)).unsqueeze(0) / scale
 
         return {
             "masked_kspace": masked_kspace,
             "full_kspace": kspace,
             "mask": mask,
             "target_image": target_image,
-            "zero_filled_image": zero_filled_image,
+            "zero_filled_image": zero_filled_target,
             "normalization_info": {"scale": scale},
             "fname": file_path.name,
             "slice_num": slice_num,
@@ -114,3 +115,4 @@ class FastMRIDataModule(pl.LightningDataModule):
             num_workers=self.config.num_workers,
             collate_fn=_collate,
         )
+
