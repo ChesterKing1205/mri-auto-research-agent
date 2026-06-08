@@ -53,9 +53,9 @@ Fill or update these values before long research runs:
 
 ```text
 fastMRI_root: /mnt/d/fastmri/brain/T1
-train_files: 9
+train_files: 10
 val_files: 3
-epochs_per_round: 1
+epochs_per_round: 10
 batch_size: 1
 max_minutes_per_round: 15
 acceleration: 4
