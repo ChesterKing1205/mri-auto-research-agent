@@ -29,6 +29,33 @@ tests/
 
 Do not add Python dependencies during the research loop.
 
+## Git and Remote Repository Policy
+
+You may use local git commands to inspect status, create a new local Auto Research branch, create commits, and reset failed local trials as described in this program.
+
+Do not run remote repository operations unless the user explicitly asks in the current Codex session. This includes:
+
+```text
+git remote add
+git remote set-url
+git push
+git pull
+git fetch
+git force-push
+gh repo create
+gh repo delete
+```
+
+Do not change the remote URL, delete branches, rewrite published history, or force push. Auto Research should manage local experiment commits only.
+
+Before starting research, create a local branch from the current clean baseline:
+
+```bash
+git checkout -b autoresearch/mri-recon-psnr
+```
+
+If that branch already exists, switch to it only after checking that the working tree is clean.
+
 ## Data
 
 Default fastMRI root:
@@ -107,27 +134,74 @@ grep "^val_loss:" run.log
 
 ## Research Loop
 
-1. Run the baseline without editing any code.
-2. Record baseline in local `results.tsv`.
-3. Make one small research change under `mri_recon_project/`.
-4. Run `uv run train.py > run.log 2>&1`.
+This loop follows the `karpathy/autoresearch` git pattern: the branch tip always represents the current best known state. A failed trial is committed for inspection, recorded in `results.tsv`, and then removed by resetting back to the commit where the trial started.
+
+0. Ensure the working tree is clean before every trial:
+
+```bash
+git status --short
+```
+
+Only ignored files such as `results.tsv`, `run.log`, `manifests/`, and `outputs/` may be present.
+
+1. If `results.tsv` does not exist, run the baseline without editing code:
+
+```bash
+uv run prepare.py
+uv run train.py > run.log 2>&1
+```
+
+Record the baseline in `results.tsv` with `decision=baseline`, `effective=yes`, and `start_commit` equal to the current commit.
+
+2. At the start of each new trial, save the current branch tip:
+
+```bash
+start_commit=$(git rev-parse HEAD)
+```
+
+This commit is the current best state before the trial.
+
+3. Make one small research change under `mri_recon_project/` only.
+
+4. Run:
+
+```bash
+uv run train.py > run.log 2>&1
+```
+
 5. Read PSNR and auxiliary metrics from `run.log`.
-6. Commit the trial.
-7. If PSNR improves over the best PSNR, keep the commit as the new best.
-8. If PSNR does not improve, reset back to the best commit.
-9. Append every attempt to `results.tsv`.
+
+6. Commit the trial:
+
+```bash
+git add mri_recon_project/
+git commit -m "Trial: <short attempt description>"
+trial_commit=$(git rev-parse HEAD)
+```
+
+7. Append the trial to `results.tsv` before any reset.
+
+8. If PSNR improves over the best PSNR so far, keep the trial commit. The branch tip is now the new best state.
+
+9. If PSNR does not improve, discard the trial code and return to the previous best state:
+
+```bash
+git reset --hard "$start_commit"
+```
+
+Do not reset `results.tsv`; it is ignored by git and should keep the full experiment history.
 
 Suggested `results.tsv` columns:
 
 ```text
-timestamp	commit	attempt	hypothesis	change_summary	psnr	ssim	nmse	val_loss	effective	decision
+timestamp	start_commit	trial_commit	attempt	hypothesis	change_summary	psnr	ssim	nmse	val_loss	effective	decision
 ```
 
 Column meanings:
 
 - `attempt`: one short sentence describing what this trial changes.
 - `effective`: `yes` if the attempt improves PSNR over the previous best, otherwise `no`.
-- `decision`: `keep` or `discard`.
+- `decision`: `baseline`, `keep`, or `discard`.
 
 ## Research Discipline
 

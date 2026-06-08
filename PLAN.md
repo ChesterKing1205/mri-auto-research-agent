@@ -56,11 +56,12 @@ mri-auto-research-agent/
 3. Codex runs `uv run prepare.py`.
 4. Codex runs the baseline with `uv run train.py`.
 5. Codex records baseline metrics in local `results.tsv`, including `attempt` and `effective` columns.
-6. Codex makes one small change under `mri_recon_project/`.
-7. Codex runs `uv run train.py`.
-8. Codex commits every trial.
-9. If PSNR improves, Codex keeps the commit as the new best.
-10. If PSNR does not improve, Codex resets to the best commit.
+6. Codex records the current branch tip as `start_commit`.
+7. Codex makes one small change under `mri_recon_project/`.
+8. Codex runs `uv run train.py`.
+9. Codex commits every trial.
+10. If PSNR improves, Codex keeps the commit as the new branch tip and best state.
+11. If PSNR does not improve, Codex records the trial and resets back to `start_commit`.
 
 ## Verification
 
