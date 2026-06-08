@@ -15,6 +15,8 @@ from mri_recon_harness.manifest import write_manifests
 
 
 def run_experiment(config: ProgramConfig) -> dict[str, Any]:
+    pl.seed_everything(config.seed, workers=True)
+
     if not Path("manifests/train_manifest.tsv").exists() or not Path("manifests/val_manifest.tsv").exists():
         write_manifests(config)
 

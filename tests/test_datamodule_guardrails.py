@@ -85,6 +85,34 @@ def test_zero_filled_image_is_reconstructed_from_masked_kspace(tmp_path):
     assert not torch.allclose(sample["zero_filled_image"], wrong_full_rss)
 
 
+def test_mask_marks_sampled_kspace_positions(tmp_path):
+    root = tmp_path / "fastmri"
+    train = root / "multicoil_train"
+    val = root / "multicoil_val"
+    train.mkdir(parents=True)
+    val.mkdir(parents=True)
+    _write_fastmri_file(train / "train.h5")
+    _write_fastmri_file(val / "val.h5")
+    config = ProgramConfig(
+        fastmri_root=root,
+        train_files=1,
+        val_files=1,
+        epochs_per_round=1,
+        batch_size=1,
+        max_minutes_per_round=15,
+        acceleration=4,
+        center_fraction=0.08,
+        seed=1,
+    )
+    train_manifest, _ = write_manifests(config, tmp_path / "manifests")
+    sample = FastMRISliceDataset(train_manifest, config)[0]
+
+    assert set(torch.unique(sample["mask"]).tolist()) <= {0.0, 1.0}
+    assert torch.allclose(sample["masked_kspace"], sample["full_kspace"] * sample["mask"])
+    assert torch.count_nonzero(sample["mask"] == 1) > 0
+    assert torch.count_nonzero(sample["mask"] == 0) > 0
+
+
 def test_guardrail_flags_non_project_changes():
     frozen = find_frozen_changes(
         [
