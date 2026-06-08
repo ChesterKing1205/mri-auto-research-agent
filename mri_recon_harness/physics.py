@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import torch
 import torch.nn.functional as F
+from fastmri import fft2c as fastmri_fft2c
+from fastmri import ifft2c as fastmri_ifft2c
 
 
 def to_tensor_complex_last(array) -> torch.Tensor:
@@ -20,19 +22,11 @@ def complex_to_complex_last(x: torch.Tensor) -> torch.Tensor:
 
 
 def fft2c(image: torch.Tensor) -> torch.Tensor:
-    image_c = complex_last_to_complex(image)
-    shifted = torch.fft.ifftshift(image_c, dim=(-2, -1))
-    kspace = torch.fft.fft2(shifted, norm="ortho")
-    kspace = torch.fft.fftshift(kspace, dim=(-2, -1))
-    return complex_to_complex_last(kspace)
+    return fastmri_fft2c(image, norm="ortho")
 
 
 def ifft2c(kspace: torch.Tensor) -> torch.Tensor:
-    kspace_c = complex_last_to_complex(kspace)
-    shifted = torch.fft.ifftshift(kspace_c, dim=(-2, -1))
-    image = torch.fft.ifft2(shifted, norm="ortho")
-    image = torch.fft.fftshift(image, dim=(-2, -1))
-    return complex_to_complex_last(image)
+    return fastmri_ifft2c(kspace, norm="ortho")
 
 
 def complex_abs(x: torch.Tensor) -> torch.Tensor:
