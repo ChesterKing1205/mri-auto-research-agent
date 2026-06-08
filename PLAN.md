@@ -26,7 +26,7 @@ mri-auto-research-agent/
 
 - Codex may edit only `mri_recon_project/`.
 - Codex must not edit `program.md`, `prepare.py`, `train.py`, or `mri_recon_harness/`.
-- `prepare.py` checks the environment and creates deterministic train/val file+slice manifests.
+- `prepare.py` checks the environment and creates deterministic train/val file manifests expanded to all slices in selected files.
 - `train.py` runs one fixed train+validation experiment and prints stable `key: value` metrics.
 - The primary metric is validation PSNR, maximized.
 - SSIM, NMSE, and validation loss are auxiliary metrics.

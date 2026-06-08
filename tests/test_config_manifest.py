@@ -29,8 +29,8 @@ def test_prepare_manifest_writes_file_slice_rows(tmp_path, monkeypatch):
     program.write_text(
         f"""
 fastMRI_root: {root}
-train_slices: 2
-val_slices: 2
+train_files: 1
+val_files: 1
 epochs_per_round: 1
 batch_size: 1
 max_minutes_per_round: 15
@@ -42,6 +42,5 @@ seed: 123
     )
     config = load_program_config(program)
     train_manifest, val_manifest = write_manifests(config, tmp_path / "manifests")
-    assert len(read_manifest(train_manifest)) == 2
-    assert len(read_manifest(val_manifest)) == 2
-
+    assert len(read_manifest(train_manifest)) == 3
+    assert len(read_manifest(val_manifest)) == 3

@@ -53,8 +53,8 @@ Fill or update these values before long research runs:
 
 ```text
 fastMRI_root: /mnt/d/fastmri/brain/T1
-train_slices: 8
-val_slices: 4
+train_files: 1
+val_files: 1
 epochs_per_round: 1
 batch_size: 1
 max_minutes_per_round: 15

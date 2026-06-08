@@ -52,8 +52,6 @@ def run_experiment(config: ProgramConfig) -> dict[str, Any]:
         enable_progress_bar=False,
         log_every_n_steps=1,
         deterministic=True,
-        limit_train_batches=config.train_slices,
-        limit_val_batches=config.val_slices,
     )
     log_path = output_dir / "log.txt"
     with log_path.open("w", encoding="utf-8") as log_file:
@@ -68,4 +66,3 @@ def run_experiment(config: ProgramConfig) -> dict[str, Any]:
         "val_loss": float(metrics["loss/val_loss"].detach().cpu()),
         "output_dir": str(output_dir),
     }
-

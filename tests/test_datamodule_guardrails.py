@@ -29,8 +29,8 @@ def test_dataset_reads_required_fields_without_cache(tmp_path):
     _write_fastmri_file(val / "val.h5")
     config = ProgramConfig(
         fastmri_root=root,
-        train_slices=1,
-        val_slices=1,
+        train_files=1,
+        val_files=1,
         epochs_per_round=1,
         batch_size=1,
         max_minutes_per_round=15,
@@ -57,4 +57,3 @@ def test_guardrail_flags_non_project_changes():
         ]
     )
     assert frozen == ["mri_recon_harness/metrics.py", "program.md"]
-

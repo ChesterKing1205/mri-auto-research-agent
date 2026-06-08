@@ -54,7 +54,7 @@ Edit `program.md` if you need to change the data root or small-run budget.
 uv run prepare.py
 ```
 
-The prepare step writes deterministic file+slice manifests under `manifests/`. It does not cache image data.
+The prepare step writes deterministic manifests under `manifests/` by selecting a fixed number of train/val HDF5 files and expanding all slices in those files. It does not cache image data.
 
 ## Run One Experiment
 

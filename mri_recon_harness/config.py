@@ -8,8 +8,8 @@ from pathlib import Path
 @dataclass(frozen=True)
 class ProgramConfig:
     fastmri_root: Path
-    train_slices: int
-    val_slices: int
+    train_files: int
+    val_files: int
     epochs_per_round: int
     batch_size: int
     max_minutes_per_round: int
@@ -21,8 +21,8 @@ class ProgramConfig:
 
 DEFAULTS = {
     "fastMRI_root": "/mnt/d/fastmri/brain/T1",
-    "train_slices": "8",
-    "val_slices": "4",
+    "train_files": "1",
+    "val_files": "1",
     "epochs_per_round": "1",
     "batch_size": "1",
     "max_minutes_per_round": "15",
@@ -45,8 +45,8 @@ def load_program_config(path: str | Path) -> ProgramConfig:
     root = Path(_extract_value(text, "fastMRI_root")).expanduser()
     config = ProgramConfig(
         fastmri_root=root,
-        train_slices=int(_extract_value(text, "train_slices")),
-        val_slices=int(_extract_value(text, "val_slices")),
+        train_files=int(_extract_value(text, "train_files")),
+        val_files=int(_extract_value(text, "val_files")),
         epochs_per_round=int(_extract_value(text, "epochs_per_round")),
         batch_size=int(_extract_value(text, "batch_size")),
         max_minutes_per_round=int(_extract_value(text, "max_minutes_per_round")),
@@ -65,8 +65,8 @@ def _validate_config(config: ProgramConfig) -> None:
         split_dir = config.fastmri_root / split
         if not split_dir.exists():
             raise FileNotFoundError(f"Missing fastMRI split directory: {split_dir}")
-    if config.train_slices < 1 or config.val_slices < 1:
-        raise ValueError("train_slices and val_slices must be positive")
+    if config.train_files < 1 or config.val_files < 1:
+        raise ValueError("train_files and val_files must be positive")
     if config.batch_size < 1:
         raise ValueError("batch_size must be positive")
     if config.epochs_per_round < 1:
