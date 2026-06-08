@@ -82,7 +82,7 @@ Then ask Codex:
 Read program.md and start the Auto Research loop. Run the baseline first, then improve only mri_recon_project/.
 ```
 
-Codex should maintain local `results.tsv`, commit every trial, keep commits that improve PSNR, and reset to the best commit when PSNR does not improve.
+Codex should maintain local `results.tsv`, commit every trial, keep commits that improve PSNR, and reset to the best commit when PSNR does not improve. Each row should include `attempt` and `effective` columns so the trial idea and whether it worked are explicit.
 
 ## WSL GitHub Setup
 

@@ -55,7 +55,7 @@ mri-auto-research-agent/
 2. Codex reads `program.md`.
 3. Codex runs `uv run prepare.py`.
 4. Codex runs the baseline with `uv run train.py`.
-5. Codex records baseline metrics in local `results.tsv`.
+5. Codex records baseline metrics in local `results.tsv`, including `attempt` and `effective` columns.
 6. Codex makes one small change under `mri_recon_project/`.
 7. Codex runs `uv run train.py`.
 8. Codex commits every trial.

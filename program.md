@@ -53,8 +53,8 @@ Fill or update these values before long research runs:
 
 ```text
 fastMRI_root: /mnt/d/fastmri/brain/T1
-train_files: 1
-val_files: 1
+train_files: 9
+val_files: 3
 epochs_per_round: 1
 batch_size: 1
 max_minutes_per_round: 15
@@ -120,8 +120,14 @@ grep "^val_loss:" run.log
 Suggested `results.tsv` columns:
 
 ```text
-timestamp	commit	hypothesis	change_summary	psnr	ssim	nmse	val_loss	decision
+timestamp	commit	attempt	hypothesis	change_summary	psnr	ssim	nmse	val_loss	effective	decision
 ```
+
+Column meanings:
+
+- `attempt`: one short sentence describing what this trial changes.
+- `effective`: `yes` if the attempt improves PSNR over the previous best, otherwise `no`.
+- `decision`: `keep` or `discard`.
 
 ## Research Discipline
 
