@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import torch
 import torch.nn.functional as F
+from fastmri import complex_abs as fastmri_complex_abs
 from fastmri import fft2c as fastmri_fft2c
 from fastmri import ifft2c as fastmri_ifft2c
+from fastmri import rss_complex as fastmri_rss_complex
 
 
 def to_tensor_complex_last(array) -> torch.Tensor:
@@ -30,11 +32,11 @@ def ifft2c(kspace: torch.Tensor) -> torch.Tensor:
 
 
 def complex_abs(x: torch.Tensor) -> torch.Tensor:
-    return torch.sqrt((x**2).sum(dim=-1).clamp_min(1e-12))
+    return fastmri_complex_abs(x)
 
 
 def rss(image: torch.Tensor, dim: int = 1) -> torch.Tensor:
-    return torch.sqrt((complex_abs(image) ** 2).sum(dim=dim).clamp_min(1e-12))
+    return fastmri_rss_complex(image, dim=dim)
 
 
 def center_crop_image(image: torch.Tensor, shape: tuple[int, int]) -> torch.Tensor:

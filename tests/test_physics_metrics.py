@@ -1,14 +1,18 @@
 from __future__ import annotations
 
 import torch
+from fastmri import complex_abs as fastmri_complex_abs
+from fastmri import rss_complex as fastmri_rss_complex
 
 from mri_recon_harness.metrics import compute_metrics
 from mri_recon_harness.physics import (
     channels_to_complex_last,
+    complex_abs,
     complex_last_to_channels,
     fft2c,
     ifft2c,
     make_equispaced_mask,
+    rss,
     standardize_kspace,
 )
 
@@ -28,6 +32,12 @@ def test_complex_channel_roundtrip():
     restored = channels_to_complex_last(channels, coils=1)
     assert restored.shape == x.shape
     assert torch.allclose(x, restored)
+
+
+def test_complex_abs_and_rss_match_fastmri_helpers():
+    x = torch.randn(2, 4, 16, 16, 2)
+    assert torch.allclose(complex_abs(x), fastmri_complex_abs(x))
+    assert torch.allclose(rss(x, dim=1), fastmri_rss_complex(x, dim=1))
 
 
 def test_equispaced_mask_matches_requested_acceleration():
