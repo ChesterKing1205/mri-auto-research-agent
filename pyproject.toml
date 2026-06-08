@@ -10,6 +10,7 @@ dependencies = [
     "pytorch-lightning>=2.2",
     "pyyaml>=6.0",
     "scikit-image>=0.22",
+    "tensorboard>=2.20.0",
     "torch>=2.2",
 ]
 
