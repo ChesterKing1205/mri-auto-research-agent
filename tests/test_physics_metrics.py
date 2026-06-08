@@ -8,6 +8,7 @@ from mri_recon_harness.physics import (
     complex_last_to_channels,
     fft2c,
     ifft2c,
+    make_equispaced_mask,
     standardize_kspace,
 )
 
@@ -29,6 +30,16 @@ def test_complex_channel_roundtrip():
     assert torch.allclose(x, restored)
 
 
+def test_equispaced_mask_matches_requested_acceleration():
+    mask = make_equispaced_mask(width=320, acceleration=4, center_fraction=0.08)
+    sampled = int(mask.sum().item())
+    assert sampled == 80
+    assert 320 / sampled == 4.0
+    center = round(320 * 0.08)
+    pad = (320 - center + 1) // 2
+    assert torch.all(mask[pad : pad + center] == 1)
+
+
 def test_metrics_are_finite_for_equal_images():
     target = torch.rand(2, 1, 32, 32)
     metrics = compute_metrics(target, target)
@@ -36,4 +47,3 @@ def test_metrics_are_finite_for_equal_images():
     assert torch.isfinite(metrics["ssim"])
     assert torch.isfinite(metrics["nmse"])
     assert metrics["nmse"].item() == 0.0
-

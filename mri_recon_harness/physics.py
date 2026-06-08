@@ -88,10 +88,15 @@ def center_crop_real(image: torch.Tensor, shape: tuple[int, int]) -> torch.Tenso
 
 def make_equispaced_mask(width: int, acceleration: int, center_fraction: float) -> torch.Tensor:
     num_low_freqs = max(1, round(width * center_fraction))
+    target_samples = max(num_low_freqs, round(width / acceleration))
     mask = torch.zeros(width, dtype=torch.float32)
     pad = (width - num_low_freqs + 1) // 2
     mask[pad : pad + num_low_freqs] = 1.0
-    offset = acceleration // 2
-    mask[offset::acceleration] = 1.0
-    return mask
+    remaining = target_samples - num_low_freqs
+    if remaining <= 0:
+        return mask
 
+    candidates = torch.cat([torch.arange(0, pad), torch.arange(pad + num_low_freqs, width)])
+    positions = torch.linspace(0, len(candidates) - 1, remaining).round().long()
+    mask[candidates[positions]] = 1.0
+    return mask
