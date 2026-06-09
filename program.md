@@ -229,6 +229,8 @@ LOOP FOREVER until the human interrupts:
 
 **NEVER STOP:** once this loop starts, do not ask whether to continue and do not stop after a baseline, after a fixed number of attempts, after a discard, after a timeout, after a crash, after repeated non-improvements, or because the current best score seems hard to beat. A completed iteration must always transition directly into the next iteration.
 
+Do not summarize and stop after any fixed number of trials. If you run out of ideas, keep thinking: reread `mri_recon_project/`, inspect `results.tsv` for near-misses, combine previously useful changes, simplify fragile changes, or try a more substantial architecture, loss, optimizer, or training-logic change within the editable scope.
+
 The only allowed stopping conditions are:
 
 - The human explicitly interrupts or asks you to stop.
@@ -247,6 +249,22 @@ git status --short
 Only ignored files such as `results.tsv`, `run.log`, `manifests/`, and `outputs/` may be present.
 
 If the current branch does not start with `autoresearch/`, stop. Do not run the loop or reset history on `main`.
+
+### Resume and Recovery
+
+At the beginning of every session and every loop iteration, reconcile git state with `results.tsv` before making a new research edit.
+
+The branch tip must represent the best recorded state. Compute the best recorded commit from `results.tsv` as the row with the highest PSNR among `decision=baseline` and `decision=keep`.
+
+If `HEAD` is not recorded in `results.tsv`, treat it as an interrupted or abandoned trial:
+
+- If `run.log` contains complete metric lines, parse them, append the missing `results.tsv` row, and then apply the normal keep/discard rule.
+- If `run.log` has no complete metric lines and no training process is still running, append a `decision=crash` row with invalid metrics, reset to the best recorded commit, and immediately continue.
+- Do not leave the branch tip on an unrecorded trial commit.
+
+If `HEAD` is recorded only as `discard`, `crash`, or `timeout`, reset to the best recorded commit before starting the next trial.
+
+Never start a new research edit until the current git tip and `results.tsv` agree on the current best state.
 
 1. If the baseline has not been recorded, run the baseline without editing code:
 
@@ -308,7 +326,7 @@ Crash handling:
 - Make at most three crash-fix attempts for one trial.
 - If the idea is fundamentally broken, records invalid metrics, needs new dependencies, changes frozen files, or still crashes after the fix attempts, append a `decision=crash` row, reset to `start_commit`, and immediately start the next trial.
 
-7. Append the trial to `results.tsv` before any reset.
+7. Append the trial to `results.tsv` before any reset. A committed trial must always end in exactly one `results.tsv` row before the next trial begins. If a run was interrupted and no final metrics exist, record it as `decision=crash`, reset to the best recorded commit, and continue.
 
 8. If PSNR improves over the best PSNR so far, keep the trial commit. Record `decision=keep` and `effective=yes`. The branch tip is now the new best state.
 
