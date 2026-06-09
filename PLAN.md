@@ -38,6 +38,7 @@ mri-auto-research-agent/
 - Own fastMRI multicoil loading, deterministic subset manifests, masks, target images, Lightning Trainer, metric computation, TensorBoard logging, and checkpoints.
 - Keep k-space and image physics tensors in complex-last format outside the neural network boundary.
 - Use `reconstruction_rss` from fastMRI HDF5 as the target image.
+- Estimate sensitivity maps from the undersampled ACS region and expose `sens_reduce` / `sens_expand` fields for bounded k-space reconstruction work.
 - Compute PSNR, SSIM, and NMSE in the harness, not in the editable project.
 - Call `mri_recon_project.build_research_module(config)` and delegate model/loss/optimizer details to the editable project.
 
@@ -46,7 +47,8 @@ mri-auto-research-agent/
 - Provide `build_research_module(config)`.
 - Return a `ResearchModule` object with `train_batch(batch)`, `validate_batch(batch)`, and `configure_optimizers()`.
 - `train_batch` and `validate_batch` return a dict with `loss`, `pred_image`, and `logs`.
-- `pred_image` must be a restored-scale magnitude image aligned to `target_image`.
+- `pred_image` must be a complex image with shape `(B,1,H,W,2)` on the same normalized scale as `target_image`.
+- The harness converts `pred_image` to magnitude and compares it with `target_image`, the normalized fastMRI `reconstruction_rss`.
 - The project may change model architecture, loss, training logic, validation logic, optimizer, scheduler, and research hyperparameters.
 
 ## Auto Research Loop
@@ -62,6 +64,7 @@ mri-auto-research-agent/
 9. Codex commits every trial.
 10. If PSNR improves, Codex keeps the commit as the new branch tip and best state.
 11. If PSNR does not improve, Codex records the trial and resets back to `start_commit`.
+12. Codex immediately starts the next trial and does not stop unless the human interrupts.
 
 ## Verification
 

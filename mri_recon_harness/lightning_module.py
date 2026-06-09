@@ -6,6 +6,7 @@ import pytorch_lightning as pl
 import torch
 
 from mri_recon_harness.metrics import compute_metrics
+from mri_recon_harness.physics import complex_abs
 from mri_recon_project import build_research_module
 
 
@@ -18,6 +19,13 @@ class HarnessLightningModule(pl.LightningModule):
     def training_step(self, batch: dict[str, Any], batch_idx: int) -> torch.Tensor:
         output = self.project.train_batch(batch)
         loss = _require_tensor(output, "loss")
+        pred = _require_tensor(output, "pred_image")
+        pred_magnitude = _prediction_magnitude(pred)
+        target = batch["target_image"].to(pred_magnitude.device)
+        if pred_magnitude.shape != target.shape:
+            raise ValueError(
+                f"pred_image magnitude shape {tuple(pred_magnitude.shape)} does not match target {tuple(target.shape)}"
+            )
         self.log("loss/train_loss", loss, on_step=False, on_epoch=True, prog_bar=True)
         _log_extra(self, output.get("logs", {}), prefix="loss/train")
         return loss
@@ -26,10 +34,13 @@ class HarnessLightningModule(pl.LightningModule):
         output = self.project.validate_batch(batch)
         loss = _require_tensor(output, "loss")
         pred = _require_tensor(output, "pred_image")
-        target = batch["target_image"].to(pred.device)
-        if pred.shape != target.shape:
-            raise ValueError(f"pred_image shape {tuple(pred.shape)} does not match target {tuple(target.shape)}")
-        metrics = compute_metrics(pred, target)
+        pred_magnitude = _prediction_magnitude(pred)
+        target = batch["target_image"].to(pred_magnitude.device)
+        if pred_magnitude.shape != target.shape:
+            raise ValueError(
+                f"pred_image magnitude shape {tuple(pred_magnitude.shape)} does not match target {tuple(target.shape)}"
+            )
+        metrics = compute_metrics(pred_magnitude, target)
         self.log("loss/val_loss", loss, on_step=False, on_epoch=True, prog_bar=True)
         self.log("val_metrics/psnr", metrics["psnr"], on_step=False, on_epoch=True, prog_bar=True)
         self.log("val_metrics/ssim", metrics["ssim"], on_step=False, on_epoch=True, prog_bar=True)
@@ -46,6 +57,12 @@ def _require_tensor(output: dict[str, Any], key: str) -> torch.Tensor:
     if not isinstance(value, torch.Tensor):
         raise TypeError(f"Project output must include tensor field '{key}'")
     return value
+
+
+def _prediction_magnitude(pred: torch.Tensor) -> torch.Tensor:
+    if pred.ndim == 5 and pred.shape[1] == 1 and pred.shape[-1] == 2:
+        return complex_abs(pred)
+    raise ValueError("pred_image must have shape (B,1,H,W,2) for complex output")
 
 
 def _log_extra(module: pl.LightningModule, logs: dict[str, Any], *, prefix: str) -> None:

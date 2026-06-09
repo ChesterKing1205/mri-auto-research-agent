@@ -12,9 +12,10 @@ from mri_recon_harness.config import ProgramConfig
 from mri_recon_harness.manifest import read_manifest
 from mri_recon_harness.physics import (
     center_crop_real,
-    ifft2c,
-    make_equispaced_mask,
-    rss,
+    complex_abs,
+    estimate_sens_maps,
+    make_gaussian_mask,
+    sens_reduce,
     standardize_kspace,
     to_tensor_complex_last,
 )
@@ -24,6 +25,8 @@ class FastMRISliceDataset(Dataset):
     def __init__(self, manifest_path: str | Path, config: ProgramConfig) -> None:
         self.rows = read_manifest(manifest_path)
         self.config = config
+        unique_paths = sorted({file_path for file_path, _ in self.rows})
+        self.file_indices = {file_path: file_idx for file_idx, file_path in enumerate(unique_paths)}
 
     def __len__(self) -> int:
         return len(self.rows)
@@ -44,18 +47,27 @@ class FastMRISliceDataset(Dataset):
         target_image = target_image / scale
 
         width = kspace.shape[-2]
-        mask_1d = make_equispaced_mask(width, self.config.acceleration, self.config.center_fraction)
-        mask = mask_1d.view(1, 1, width, 1).expand(kspace.shape[0], kspace.shape[1], width, 2)
+        total_samples = round(width / self.config.acceleration)
+        file_idx = self.file_indices[file_path]
+        mask = make_gaussian_mask(width, total_samples, self.config.acs, seed=self.config.seed + file_idx)
+        mask = mask.to(dtype=kspace.dtype, device=kspace.device)
         masked_kspace = kspace * mask
 
-        zero_filled_coils = ifft2c(masked_kspace.unsqueeze(0)).squeeze(0)
-        zero_filled_image = rss(zero_filled_coils.unsqueeze(0), dim=1).squeeze(0)
-        zero_filled_image = center_crop_real(zero_filled_image, (320, 320)).unsqueeze(0) / scale
+        masked_batch = masked_kspace.unsqueeze(0)
+        full_batch = kspace.unsqueeze(0)
+        mask_batch = mask.unsqueeze(0)
+        sens_maps = estimate_sens_maps(masked_batch, mask_batch)
+        zero_filled_complex = sens_reduce(masked_batch, sens_maps) / scale
+        target_complex = sens_reduce(full_batch, sens_maps) / scale
+        zero_filled_image = complex_abs(zero_filled_complex).squeeze(0)
 
         return {
             "masked_kspace": masked_kspace,
             "full_kspace": kspace,
             "mask": mask,
+            "sens_maps": sens_maps.squeeze(0),
+            "target_complex": target_complex.squeeze(0),
+            "zero_filled_complex": zero_filled_complex.squeeze(0),
             "target_image": target_image,
             "zero_filled_image": zero_filled_image,
             "normalization_info": {"scale": scale},
@@ -70,6 +82,9 @@ def _collate(batch: list[dict[str, Any]]) -> dict[str, Any]:
         "masked_kspace",
         "full_kspace",
         "mask",
+        "sens_maps",
+        "target_complex",
+        "zero_filled_complex",
         "target_image",
         "zero_filled_image",
     ]
@@ -99,7 +114,7 @@ class FastMRIDataModule(pl.LightningDataModule):
         return DataLoader(
             self.train_dataset,
             batch_size=self.config.batch_size,
-            shuffle=False,
+            shuffle=True,
             num_workers=self.config.num_workers,
             collate_fn=_collate,
         )

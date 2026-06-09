@@ -22,7 +22,7 @@ class ConvBlock(nn.Module):
 
 
 class SmallUNet(nn.Module):
-    def __init__(self, in_channels: int = 1, base_channels: int = 16) -> None:
+    def __init__(self, in_channels: int = 2, out_channels: int = 2, base_channels: int = 16) -> None:
         super().__init__()
         self.pool = nn.MaxPool2d(2)
         self.enc1 = ConvBlock(in_channels, base_channels)
@@ -35,7 +35,7 @@ class SmallUNet(nn.Module):
         self.dec2 = ConvBlock(base_channels * 4, base_channels * 2)
         self.up1 = nn.ConvTranspose2d(base_channels * 2, base_channels, kernel_size=2, stride=2)
         self.dec1 = ConvBlock(base_channels * 2, base_channels)
-        self.out = nn.Conv2d(base_channels, 1, kernel_size=1)
+        self.out = nn.Conv2d(base_channels, out_channels, kernel_size=1)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         skip1 = self.enc1(x)

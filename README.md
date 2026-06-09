@@ -24,6 +24,8 @@ mri_recon_project/      # Codex-editable model/loss/optimizer code
 
 Codex may edit only `mri_recon_project/`.
 
+The harness reads fastMRI multicoil k-space, estimates sensitivity maps from the undersampled ACS region, exposes `sens_reduce` / `sens_expand` compatible tensors to the editable project, and keeps `reconstruction_rss` as the image-domain validation target. The project should return `pred_image` as a normalized complex single-coil image with shape `(B,1,H,W,2)`; the harness converts it to magnitude before computing PSNR, SSIM, and NMSE.
+
 The editable project must keep the harness-facing API stable:
 
 ```text
@@ -83,6 +85,8 @@ Read program.md and start the Auto Research loop. Run the baseline first, then i
 ```
 
 Codex should maintain local `results.tsv`, commit every trial, and keep commits that improve PSNR. For failed trials, Codex should record the trial, then reset back to the commit where that trial started. Each row should include `attempt` and `effective` columns so the trial idea and whether it worked are explicit.
+
+Once the loop starts, Codex should continue indefinitely until you interrupt it.
 
 ## WSL GitHub Setup
 

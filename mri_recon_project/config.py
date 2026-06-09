@@ -2,7 +2,8 @@ from __future__ import annotations
 
 
 DEFAULT_PROJECT_CONFIG = {
-    "in_channels": 1,
+    "in_channels": 2,
+    "out_channels": 2,
     "base_channels": 16,
     "learning_rate": 1e-3,
 }

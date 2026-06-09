@@ -133,6 +133,7 @@ batch_size: 1
 max_minutes_per_round: 15
 acceleration: 4
 center_fraction: 0.08
+acs: 24
 seed: 1337
 ```
 
@@ -156,7 +157,7 @@ val_loss
 
 ## Evaluation Standard
 
-The goal is to maximize PSNR under the fixed file split and training budget. Since each round uses the same manifests, epochs, acceleration, center fraction, and metric code, compare trials directly.
+The goal is to maximize PSNR under the fixed file split and training budget. Since each round uses the same manifests, epochs, acceleration, ACS width, and metric code, compare trials directly.
 
 Use this decision order:
 
@@ -226,6 +227,16 @@ This loop follows the `karpathy/autoresearch` git pattern: the branch tip always
 
 LOOP FOREVER until the human interrupts:
 
+**NEVER STOP:** once this loop starts, do not ask whether to continue and do not stop after a baseline, after a fixed number of attempts, after a discard, after a timeout, after a crash, after repeated non-improvements, or because the current best score seems hard to beat. A completed iteration must always transition directly into the next iteration.
+
+The only allowed stopping conditions are:
+
+- The human explicitly interrupts or asks you to stop.
+- The baseline cannot run before any research edit has been made.
+- The current branch is not an `autoresearch/` branch.
+- The tracked working tree contains unexpected changes outside the editable scope.
+- The environment or data root is missing in a way that prevents any experiment from running.
+
 0. Ensure you are on the dedicated local branch and the tracked working tree is clean:
 
 ```bash
@@ -277,7 +288,7 @@ timeout 30m uv run train.py > run.log 2>&1
 run_status=$?
 ```
 
-The training budget is 15 minutes. The outer `timeout 30m` is a guard for hangs, slow data stalls, or deadlocks. If `run_status` is `124`, mark the trial as `timeout`, append a row to `results.tsv`, and reset to `start_commit`.
+The training budget is 15 minutes. The outer `timeout 30m` is a guard for hangs, slow data stalls, or deadlocks. If `run_status` is `124`, mark the trial as `timeout`, append a row to `results.tsv`, reset to `start_commit`, and immediately start the next trial.
 
 6. Read PSNR and auxiliary metrics:
 
@@ -295,7 +306,7 @@ Crash handling:
 
 - If the crash is a simple implementation error caused by the current trial, fix it under `mri_recon_project/`, amend the trial commit with `git commit --amend --no-edit`, update `trial_commit`, and rerun.
 - Make at most three crash-fix attempts for one trial.
-- If the idea is fundamentally broken, records invalid metrics, needs new dependencies, changes frozen files, or still crashes after the fix attempts, append a `decision=crash` row and reset to `start_commit`.
+- If the idea is fundamentally broken, records invalid metrics, needs new dependencies, changes frozen files, or still crashes after the fix attempts, append a `decision=crash` row, reset to `start_commit`, and immediately start the next trial.
 
 7. Append the trial to `results.tsv` before any reset.
 
@@ -317,6 +328,8 @@ Before running `git reset --hard`, verify that:
 
 If unexpected tracked changes appear outside `mri_recon_project/`, stop and report them instead of resetting.
 
+After every keep, discard, timeout, or crash decision, go back to step 0 and continue the loop. Do not summarize final results or wait for permission unless the human interrupts.
+
 ## Research Discipline
 
 - Change one idea per round.
@@ -326,3 +339,5 @@ If unexpected tracked changes appear outside `mri_recon_project/`, stop and repo
 - Treat failures as useful evidence and record them.
 - Keep going without asking whether to continue once the loop has started.
 - Keep the `ResearchModule` public methods compatible with the harness: `train_batch`, `validate_batch`, and `configure_optimizers`.
+- `pred_image` must be a complex image with shape `(B,1,H,W,2)` on the same normalized scale as `target_image`. The harness converts it to magnitude and compares it with `target_image`, which is the normalized fastMRI `reconstruction_rss`.
+- Do not use `target_image`, `target_complex`, `full_kspace`, or validation-set ground truth fields to construct `pred_image` inside `validate_batch`. These fields are available for loss computation and diagnostics, not for leaking answers into predictions.

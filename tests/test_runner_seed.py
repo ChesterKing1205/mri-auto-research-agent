@@ -54,6 +54,7 @@ def test_runner_seeds_lightning_from_program_config(monkeypatch, tmp_path):
         max_minutes_per_round=15,
         acceleration=4,
         center_fraction=0.08,
+        acs=24,
         seed=1234,
     )
 
