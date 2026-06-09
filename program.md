@@ -1,96 +1,25 @@
 # MRI Auto Research Program
 
-You are running an Auto Research loop for fastMRI multicoil MRI reconstruction.
+You are an autonomous research agent improving a fastMRI multicoil MRI reconstruction baseline.
 
-## Goal
-
-Maximize validation PSNR on the fixed validation subset.
-
-## Editable Scope
-
-You may edit only:
-
-```text
-mri_recon_project/
-```
-
-## Frozen Scope
-
-Do not edit:
-
-```text
-program.md
-prepare.py
-train.py
-mri_recon_harness/
-pyproject.toml
-tests/
-```
-
-Do not add Python dependencies during the research loop.
+Your job is to repeatedly modify the research code, run the fixed experiment, keep changes that improve validation PSNR, discard changes that do not, and continue until the human interrupts you.
 
 ## Setup
 
-Before starting a new Auto Research run:
-
-1. Check that the repository is clean:
+Work in this repository on the local branch:
 
 ```bash
+autoresearch/mri-recon-psnr
+```
+
+Before starting or resuming:
+
+```bash
+git branch --show-current
 git status --short
 ```
 
-Only ignored files such as `.venv/`, `results.tsv`, `run.log`, `manifests/`, and `outputs/` may be present.
-
-2. Create or switch to the dedicated local branch:
-
-```bash
-git checkout -b autoresearch/mri-recon-psnr
-```
-
-If the branch already exists, switch to it only after confirming the working tree is clean:
-
-```bash
-git switch autoresearch/mri-recon-psnr
-```
-
-3. Read the in-scope project files before proposing trial ideas:
-
-```text
-README.md
-program.md
-mri_recon_project/
-```
-
-4. Verify the data root exists. If deterministic manifests are missing, run:
-
-```bash
-uv run prepare.py
-```
-
-If `prepare.py` fails because data or environment setup is missing, stop and report the setup issue. Do not modify code to bypass missing data.
-
-5. If `results.tsv` does not exist, initialize it with the header row shown in the Logging section. Keep it untracked.
-
-## Git and Remote Repository Policy
-
-You may use local git commands to inspect status, create a local Auto Research branch, create commits, amend the current trial commit when fixing a simple crash, and reset failed local trials as described in this program.
-
-Do not run remote repository operations unless the user explicitly asks in the current Codex session. This includes:
-
-```text
-git remote add
-git remote set-url
-git push
-git pull
-git fetch
-git force-push
-gh repo create
-gh repo delete
-```
-
-Do not change the remote URL, delete branches, rewrite published history, or force push. Auto Research should manage local experiment commits only.
-
-Never commit generated or local-only files:
+Only ignored local artifacts may be present:
 
 ```text
 results.tsv
@@ -98,31 +27,61 @@ run.log
 manifests/
 outputs/
 .venv/
+__pycache__/
+.pytest_cache/
 ```
 
-Only run destructive reset commands on a branch whose name starts with `autoresearch/`. Never run `git reset --hard` on `main`.
+If the current branch is not an `autoresearch/` branch, stop. Never run `git reset --hard` on `main`.
 
-## Data
-
-Default fastMRI root:
+Read these before proposing a trial:
 
 ```text
-/mnt/d/fastmri/brain/T1
+program.md
+README.md
+mri_recon_project/
 ```
 
-Expected layout:
+Prepare deterministic manifests if missing:
+
+```bash
+uv run prepare.py
+```
+
+If setup fails because the data root, Python environment, or dependencies are missing, stop and report the setup issue. Do not edit code to hide a broken setup.
+
+Do not run remote git operations unless the human explicitly asks in the current session. In particular, do not run:
 
 ```text
-multicoil_train/
-multicoil_val/
-multicoil_test/
+git push
+git pull
+git fetch
+git remote add
+git remote set-url
+git force-push
+gh repo create
 ```
 
-Every sample is read from the original fastMRI HDF5 file. Do not create image caches.
+## Experimentation
 
-## Experiment Budget
+The goal is simple: maximize validation PSNR.
 
-Fill or update these values before long research runs:
+Primary metric:
+
+```text
+psnr
+```
+
+Auxiliary metrics:
+
+```text
+ssim
+nmse
+val_loss
+```
+
+Use auxiliary metrics only as supporting evidence. A trial with worse PSNR should normally be discarded even if SSIM, NMSE, or val_loss improves.
+
+The fixed experiment is defined by:
 
 ```text
 fastMRI_root: /mnt/d/fastmri/brain/T1
@@ -137,61 +96,119 @@ acs: 24
 seed: 1337
 ```
 
-## Primary Metric
-
-Primary metric:
+The data layout is:
 
 ```text
-psnr
+/mnt/d/fastmri/brain/T1/
+  multicoil_train/
+  multicoil_val/
+  multicoil_test/
 ```
 
-Maximize this value.
+Each sample is read from the original fastMRI HDF5 file. Do not create image caches.
 
-Auxiliary metrics:
+You may edit only:
 
 ```text
-ssim
-nmse
-val_loss
+mri_recon_project/
 ```
 
-## Evaluation Standard
+Do not edit during the research loop:
 
-The goal is to maximize PSNR under the fixed file split and training budget. Since each round uses the same manifests, epochs, acceleration, ACS width, and metric code, compare trials directly.
-
-Use this decision order:
-
-1. A higher PSNR is the main reason to keep a trial.
-2. If PSNR is unchanged within noise, keep only if the code is clearly simpler or more robust.
-3. If PSNR improves by a tiny amount but adds fragile, hard-to-maintain complexity, prefer discarding it.
-4. SSIM, NMSE, and validation loss are supporting evidence only. Do not keep a trial with worse PSNR merely because an auxiliary metric improved.
-
-## Commands
-
-Prepare deterministic manifests:
-
-```bash
-uv run prepare.py
+```text
+program.md
+README.md
+PLAN.md
+prepare.py
+train.py
+mri_recon_harness/
+pyproject.toml
+uv.lock
+tests/
 ```
 
-Run one fixed train+validation experiment:
+Do not add Python dependencies during the research loop.
+
+The harness is fixed. It owns data loading, masks, sensitivity maps, target images, Lightning training, metrics, logging, and checkpoints. Treat it as the judge.
+
+The project must keep this public API:
+
+```text
+build_research_module(config)
+ResearchModule.train_batch(batch)
+ResearchModule.validate_batch(batch)
+ResearchModule.configure_optimizers()
+```
+
+`train_batch` and `validate_batch` must return:
+
+```text
+loss
+pred_image
+logs
+```
+
+`pred_image` must be a complex image with shape:
+
+```text
+(B,1,H,W,2)
+```
+
+It must be on the same normalized scale as `target_image`. The harness converts `pred_image` to magnitude and compares it with normalized fastMRI `reconstruction_rss`.
+
+Do not use validation ground-truth fields to construct `pred_image`. In particular, do not use these fields to leak answers into validation predictions:
+
+```text
+target_image
+target_complex
+full_kspace
+```
+
+These fields may be used for training losses and diagnostics, but not to construct validation predictions.
+
+What you CAN do: Modify `mri_recon_project/` — this is the only directory you edit during research. Within that boundary, everything is fair game: model architecture, residual/image-domain prediction logic, k-space data consistency using provided batch fields, losses, optimizer, scheduler, normalization, `train_batch`, validation-time inference, internal helper modules, hyperparameters, model size, etc. You can use harness-provided tensors such as undersampled k-space, masks, sensitivity maps, zero-filled complex images, and normalized targets according to the public project API, as long as validation predictions do not use ground truth.
+
+What you CANNOT do: You cannot change the dataset split, experiment budget, metric implementation, harness, `train.py`, `prepare.py`, dependencies, lockfiles, tests, or this `program.md` during the research loop. You cannot create image caches, commit generated files, use validation targets as prediction inputs, leak `target_image`, `target_complex`, or `full_kspace` into validation predictions, or increase compute to make results non-comparable. The harness is the judge; do not move the goalposts.
+
+The goal is simple: maximize validation PSNR on the fixed validation subset. Compare every trial against the best PSNR already recorded in `results.tsv`, not merely the previous row. SSIM, NMSE, and validation loss are useful diagnostics, but they do not override PSNR. A trial with worse PSNR is normally discarded even if an auxiliary metric improves.
+
+Simplicity criterion: prefer the simplest change that improves PSNR. A small gain from brittle, hard-to-explain code is usually not worth keeping. If two trials are effectively tied, keep the simpler and more robust one. Change one idea per trial; do not bundle unrelated model, loss, optimizer, and inference changes unless the combined change is the idea being tested.
+
+The first run: before any research edit, run the unmodified baseline through the fixed command path and record it in `results.tsv` with `decision=baseline` and `effective=yes`. This baseline establishes the score all later trials must beat. If the baseline cannot run or metrics cannot be parsed, treat it as setup failure, report it, and do not edit research code to bypass the failure.
+
+## Output Format
+
+Run one experiment with:
 
 ```bash
 timeout 30m uv run train.py > run.log 2>&1
 run_status=$?
 ```
 
-Read metrics:
+Read metrics with:
 
 ```bash
 grep -E "^(primary_metric|psnr|ssim|nmse|val_loss):" run.log
 ```
 
-## Logging
+Expected metric lines look like:
 
-When an experiment finishes, append one tab-separated row to `results.tsv`. Use tabs, not commas.
+```text
+primary_metric: psnr
+psnr: <float>
+ssim: <float>
+nmse: <float>
+val_loss: <float>
+output_dir: outputs/version_N
+```
 
-`results.tsv` must stay untracked. Do not commit it.
+If the metric lines are missing, the run did not finish cleanly.
+
+## Logging Results
+
+Append every completed trial to `results.tsv`. Use tabs, not commas.
+
+`results.tsv` must remain untracked.
 
 Columns:
 
@@ -199,16 +216,16 @@ Columns:
 timestamp	start_commit	trial_commit	attempt	hypothesis	change_summary	psnr	ssim	nmse	val_loss	effective	decision
 ```
 
-Column meanings:
+Meanings:
 
 - `timestamp`: local timestamp when the row is written.
-- `start_commit`: commit where the trial started; this is the previous best state.
-- `trial_commit`: commit that contains the trial code; for baseline, use `start_commit`.
-- `attempt`: one short sentence describing what this trial changes.
-- `hypothesis`: why this change might improve PSNR.
-- `change_summary`: concrete summary of files/functions changed.
-- `psnr`, `ssim`, `nmse`, `val_loss`: parsed values from `run.log`.
-- `effective`: `yes` if the attempt improves PSNR over the previous best, otherwise `no`.
+- `start_commit`: commit where the trial started.
+- `trial_commit`: commit containing the trial code. For baseline, use `start_commit`.
+- `attempt`: short description of the change.
+- `hypothesis`: why the change might improve PSNR.
+- `change_summary`: concrete files/functions changed.
+- `psnr`, `ssim`, `nmse`, `val_loss`: parsed from `run.log`.
+- `effective`: `yes` if PSNR improves over the best recorded PSNR, otherwise `no`.
 - `decision`: `baseline`, `keep`, `discard`, `crash`, or `timeout`.
 
 For crashes and timeouts, use:
@@ -221,141 +238,28 @@ val_loss=inf
 effective=no
 ```
 
+A committed trial must end in exactly one `results.tsv` row before the next trial begins.
+
 ## The Experiment Loop
 
-This loop follows the `karpathy/autoresearch` git pattern: the branch tip always represents the current best known state. A failed trial is committed for inspection, recorded in `results.tsv`, and then removed by resetting back to the commit where the trial started.
+LOOP FOREVER:
 
-LOOP FOREVER until the human interrupts:
+1. Reconcile state before doing anything else. Run `git branch --show-current` and `git status --short`. The branch must start with `autoresearch/`, and only ignored local artifacts may be present. Find the best recorded commit in `results.tsv`: the highest PSNR row whose `decision` is `baseline` or `keep`. If `HEAD` is an unresolved trial, resolve it before making a new edit: parse complete metrics from `run.log` if present; otherwise, if no training process is running, record it as `crash`. If a newer docs-only rule commit such as `program.md` exists, preserve it while restoring only `mri_recon_project/` to the best recorded research state.
 
-**NEVER STOP:** once this loop starts, do not ask whether to continue and do not stop after a baseline, after a fixed number of attempts, after a discard, after a timeout, after a crash, after repeated non-improvements, or because the current best score seems hard to beat. A completed iteration must always transition directly into the next iteration.
+2. Record the baseline if needed. If `results.tsv` does not exist, create it with the header. If no baseline row exists, run `uv run prepare.py`, then `timeout 30m uv run train.py > run.log 2>&1`, parse the metric lines, and record `decision=baseline`, `effective=yes`, and `trial_commit=start_commit`. If the baseline cannot run or metrics cannot be parsed, this is a setup failure; inspect `tail -n 80 run.log`, report the issue, and stop.
 
-Do not summarize and stop after any fixed number of trials. If you run out of ideas, keep thinking: reread `mri_recon_project/`, inspect `results.tsv` for near-misses, combine previously useful changes, simplify fragile changes, or try a more substantial architecture, loss, optimizer, or training-logic change within the editable scope.
+3. Start one new trial from the current best state. Save `start_commit=$(git rev-parse HEAD)`. Make one research change under `mri_recon_project/` only. Commit before running with `git add mri_recon_project/` and `git commit -m "Trial: <short attempt description>"`. Do not commit `results.tsv`, `run.log`, `manifests/`, `outputs/`, `.venv/`, `__pycache__/`, or `.pytest_cache/`.
 
-The only allowed stopping conditions are:
+4. Run the trial with `timeout 30m uv run train.py > run.log 2>&1`, save `run_status=$?`, and parse metrics using `grep -E "^(primary_metric|psnr|ssim|nmse|val_loss):" run.log`.
 
-- The human explicitly interrupts or asks you to stop.
-- The baseline cannot run before any research edit has been made.
-- The current branch is not an `autoresearch/` branch.
-- The tracked working tree contains unexpected changes outside the editable scope.
-- The environment or data root is missing in a way that prevents any experiment from running.
+5. Decide the result. Compare trial PSNR against the best PSNR in `results.tsv`, not merely the previous row. If PSNR improves, append one row with `decision=keep`, set `effective=yes`, and keep the trial commit as the new best research state. If PSNR is equal or worse, append one row with `decision=discard`, set `effective=no`, restore research code to `start_commit`, and immediately continue.
 
-0. Ensure you are on the dedicated local branch and the tracked working tree is clean:
+6. Return to step 1 after every baseline, keep, discard, timeout, crash, or recovery action. A committed trial must always end in exactly one `results.tsv` row before the next trial begins.
 
-```bash
-git branch --show-current
-git status --short
-```
+The idea is that you are a completely autonomous researcher trying things out. If a change works, keep it. If it does not work, discard it. You are advancing the branch so you can iterate from progressively better research states. If you feel stuck, you may rewind to the best recorded state, but do this very sparingly, if ever. The normal behavior is to keep trying, using `results.tsv` as evidence: reread `mri_recon_project/`, inspect near-misses, combine useful changes, simplify fragile code, or try a larger architecture, loss, optimizer, normalization, or data-consistency change within scope.
 
-Only ignored files such as `results.tsv`, `run.log`, `manifests/`, and `outputs/` may be present.
+Timeouts are failed experiments, not stopping conditions. If `run_status` is `124`, append one `results.tsv` row with `decision=timeout`, use the invalid metric placeholders from the Logging Results section, set `effective=no`, restore research code to `start_commit`, and immediately continue the loop.
 
-If the current branch does not start with `autoresearch/`, stop. Do not run the loop or reset history on `main`.
+Crashes are also failed experiments, not stopping conditions. If metrics are missing or unparsable, inspect `tail -n 80 run.log`. If the crash is a simple implementation error caused by the current trial, fix only `mri_recon_project/`, amend the trial commit, and rerun; make at most three crash-fix attempts. If the idea is broken, needs forbidden dependencies, changes frozen files, leaks validation targets, or still crashes after the fix attempts, append one `results.tsv` row with `decision=crash`, use invalid metrics, set `effective=no`, restore research code to `start_commit`, and immediately continue.
 
-### Resume and Recovery
-
-At the beginning of every session and every loop iteration, reconcile git state with `results.tsv` before making a new research edit.
-
-The branch tip must represent the best recorded state. Compute the best recorded commit from `results.tsv` as the row with the highest PSNR among `decision=baseline` and `decision=keep`.
-
-If `HEAD` is not recorded in `results.tsv`, treat it as an interrupted or abandoned trial:
-
-- If `run.log` contains complete metric lines, parse them, append the missing `results.tsv` row, and then apply the normal keep/discard rule.
-- If `run.log` has no complete metric lines and no training process is still running, append a `decision=crash` row with invalid metrics, reset to the best recorded commit, and immediately continue.
-- Do not leave the branch tip on an unrecorded trial commit.
-
-If `HEAD` is recorded only as `discard`, `crash`, or `timeout`, reset to the best recorded commit before starting the next trial.
-
-Never start a new research edit until the current git tip and `results.tsv` agree on the current best state.
-
-1. If the baseline has not been recorded, run the baseline without editing code:
-
-```bash
-start_commit=$(git rev-parse HEAD)
-uv run prepare.py
-timeout 30m uv run train.py > run.log 2>&1
-grep -E "^(primary_metric|psnr|ssim|nmse|val_loss):" run.log
-```
-
-Record the baseline in `results.tsv` with `decision=baseline`, `effective=yes`, and `trial_commit=start_commit`.
-
-If the baseline crashes or metrics cannot be parsed, this is a setup failure. Inspect `tail -n 80 run.log`, report the problem, and stop. Do not edit research code to hide a broken baseline.
-
-2. At the start of each new trial, save the current branch tip:
-
-```bash
-start_commit=$(git rev-parse HEAD)
-```
-
-This commit is the current best state before the trial. Compare every new result against the best PSNR in `results.tsv`, not merely the previous attempted row.
-
-3. Make one small research change under `mri_recon_project/` only.
-
-4. Commit the trial before running it:
-
-```bash
-git add mri_recon_project/
-git commit -m "Trial: <short attempt description>"
-trial_commit=$(git rev-parse HEAD)
-```
-
-Do not include `results.tsv`, `run.log`, `manifests/`, or `outputs/` in the commit.
-
-5. Run the experiment with redirected output:
-
-```bash
-timeout 30m uv run train.py > run.log 2>&1
-run_status=$?
-```
-
-The training budget is 15 minutes. The outer `timeout 30m` is a guard for hangs, slow data stalls, or deadlocks. If `run_status` is `124`, mark the trial as `timeout`, append a row to `results.tsv`, reset to `start_commit`, and immediately start the next trial.
-
-6. Read PSNR and auxiliary metrics:
-
-```bash
-grep -E "^(primary_metric|psnr|ssim|nmse|val_loss):" run.log
-```
-
-If the grep output is empty or the primary metric cannot be parsed, treat the run as a crash. Inspect the error:
-
-```bash
-tail -n 80 run.log
-```
-
-Crash handling:
-
-- If the crash is a simple implementation error caused by the current trial, fix it under `mri_recon_project/`, amend the trial commit with `git commit --amend --no-edit`, update `trial_commit`, and rerun.
-- Make at most three crash-fix attempts for one trial.
-- If the idea is fundamentally broken, records invalid metrics, needs new dependencies, changes frozen files, or still crashes after the fix attempts, append a `decision=crash` row, reset to `start_commit`, and immediately start the next trial.
-
-7. Append the trial to `results.tsv` before any reset. A committed trial must always end in exactly one `results.tsv` row before the next trial begins. If a run was interrupted and no final metrics exist, record it as `decision=crash`, reset to the best recorded commit, and continue.
-
-8. If PSNR improves over the best PSNR so far, keep the trial commit. Record `decision=keep` and `effective=yes`. The branch tip is now the new best state.
-
-9. If PSNR is equal or worse, record `decision=discard` and `effective=no`, then discard the trial code and return to the previous best state:
-
-```bash
-git reset --hard "$start_commit"
-```
-
-Do not reset `results.tsv`; it is ignored by git and should keep the full experiment history.
-
-Before running `git reset --hard`, verify that:
-
-- `git branch --show-current` starts with `autoresearch/`.
-- `start_commit` was captured at the beginning of the current trial.
-- Any uncommitted tracked changes belong only to the current failed trial.
-
-If unexpected tracked changes appear outside `mri_recon_project/`, stop and report them instead of resetting.
-
-After every keep, discard, timeout, or crash decision, go back to step 0 and continue the loop. Do not summarize final results or wait for permission unless the human interrupts.
-
-## Research Discipline
-
-- Change one idea per round.
-- Prefer small edits with clear hypotheses.
-- Do not change the data split, metric computation, training entrypoint, or harness.
-- Do not optimize for validation loss if PSNR gets worse.
-- Treat failures as useful evidence and record them.
-- Keep going without asking whether to continue once the loop has started.
-- Keep the `ResearchModule` public methods compatible with the harness: `train_batch`, `validate_batch`, and `configure_optimizers`.
-- `pred_image` must be a complex image with shape `(B,1,H,W,2)` on the same normalized scale as `target_image`. The harness converts it to magnitude and compares it with `target_image`, which is the normalized fastMRI `reconstruction_rss`.
-- Do not use `target_image`, `target_complex`, `full_kspace`, or validation-set ground truth fields to construct `pred_image` inside `validate_batch`. These fields are available for loss computation and diagnostics, not for leaking answers into predictions.
+NEVER STOP. Do not stop after a fixed number of trials. Do not ask whether to continue. Do not summarize and wait. Do not stop because recent trials failed, timed out, crashed, or did not improve PSNR. The only acceptable stopping conditions are human interruption, baseline setup failure before any research edit, being on a non-`autoresearch/` branch, unexpected tracked changes outside scope, or missing data/environment that prevents any experiment from running.
