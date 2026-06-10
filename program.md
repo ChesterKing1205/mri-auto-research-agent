@@ -87,7 +87,7 @@ The fixed experiment is defined by:
 fastMRI_root: /mnt/d/fastmri/brain/T1
 train_files: 10
 val_files: 3
-epochs_per_round: 30
+epochs_per_round: 10
 batch_size: 1
 max_minutes_per_round: 15
 acceleration: 4
