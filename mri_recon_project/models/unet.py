@@ -5,7 +5,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
-class ResidualBlock(nn.Module):
+class ConvBlock(nn.Module):
     def __init__(
         self,
         in_channels: int,
@@ -28,14 +28,9 @@ class ResidualBlock(nn.Module):
                 layers.append(norm)
             layers.append(_make_activation(activation))
         self.net = nn.Sequential(*layers)
-        self.skip = (
-            nn.Conv2d(in_channels, out_channels, kernel_size=1)
-            if in_channels != out_channels
-            else nn.Identity()
-        )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return self.net(x) + self.skip(x)
+        return self.net(x)
 
 
 class Downsample(nn.Module):
@@ -94,7 +89,7 @@ class SmallUNet(nn.Module):
         prev_channels = channels[0]
         for idx, channels_at_level in enumerate(channels):
             self.down_blocks.append(
-                ResidualBlock(
+                ConvBlock(
                     prev_channels,
                     channels_at_level,
                     num_layers=conv_layers_per_block,
@@ -106,7 +101,7 @@ class SmallUNet(nn.Module):
             self.downs.append(nn.Identity() if is_last_level else Downsample(channels_at_level))
             prev_channels = channels_at_level
 
-        self.mid = ResidualBlock(
+        self.mid = ConvBlock(
             channels[-1],
             channels[-1],
             num_layers=conv_layers_per_block,
@@ -121,7 +116,7 @@ class SmallUNet(nn.Module):
         for idx, skip_channels in enumerate(reversed_channels):
             self.ups.append(nn.Identity() if idx == 0 else Upsample(prev_channels, upsample_mode))
             self.up_blocks.append(
-                ResidualBlock(
+                ConvBlock(
                     prev_channels + skip_channels,
                     skip_channels,
                     num_layers=conv_layers_per_block,
