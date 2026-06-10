@@ -33,30 +33,6 @@ class ConvBlock(nn.Module):
         return self.net(x)
 
 
-class DownBlock(nn.Module):
-    def __init__(
-        self,
-        in_channels: int,
-        out_channels: int,
-        *,
-        conv_layers: int,
-        activation: str,
-        normalization: str,
-    ) -> None:
-        super().__init__()
-        self.pool = nn.MaxPool2d(2)
-        self.block = ConvBlock(
-            in_channels,
-            out_channels,
-            num_layers=conv_layers,
-            activation=activation,
-            normalization=normalization,
-        )
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return self.block(self.pool(x))
-
-
 class UpBlock(nn.Module):
     def __init__(
         self,
@@ -106,47 +82,55 @@ class SmallUNet(nn.Module):
         if channel_multiplier < 1:
             raise ValueError("channel_multiplier must be positive")
 
-        channels = [base_channels * (channel_multiplier**level) for level in range(depth + 1)]
-        block_kwargs = {
-            "conv_layers": conv_layers_per_block,
-            "activation": activation,
-            "normalization": normalization,
-        }
+        encoder_channels = [base_channels * (channel_multiplier**level) for level in range(depth)]
+        bottleneck_channels = base_channels * (channel_multiplier**depth)
+        self.downsample = nn.MaxPool2d(2)
         self.encoder = nn.ModuleList(
             [
                 ConvBlock(
-                    in_channels,
-                    channels[0],
+                    in_channels if level == 0 else encoder_channels[level - 1],
+                    encoder_channels[level],
                     num_layers=conv_layers_per_block,
                     activation=activation,
                     normalization=normalization,
-                ),
-                *[
-                    DownBlock(channels[level - 1], channels[level], **block_kwargs)
-                    for level in range(1, depth)
-                ],
+                )
+                for level in range(depth)
             ]
         )
-        self.bottleneck = DownBlock(channels[depth - 1], channels[depth], **block_kwargs)
+        self.bottleneck = ConvBlock(
+            encoder_channels[-1],
+            bottleneck_channels,
+            num_layers=conv_layers_per_block,
+            activation=activation,
+            normalization=normalization,
+        )
+        decoder_in_channels = [bottleneck_channels, *reversed(encoder_channels[1:])]
         self.decoder = nn.ModuleList(
             [
                 UpBlock(
-                    channels[level + 1],
-                    channels[level],
-                    channels[level],
-                    **block_kwargs,
+                    decoder_in,
+                    skip_channels,
+                    skip_channels,
+                    conv_layers=conv_layers_per_block,
+                    activation=activation,
+                    normalization=normalization,
                     upsample_mode=upsample_mode,
                 )
-                for level in range(depth - 1, -1, -1)
+                for decoder_in, skip_channels in zip(
+                    decoder_in_channels,
+                    reversed(encoder_channels),
+                    strict=True,
+                )
             ]
         )
-        self.out = nn.Conv2d(channels[0], out_channels, kernel_size=1)
+        self.out = nn.Conv2d(encoder_channels[0], out_channels, kernel_size=1)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         skips = []
         for block in self.encoder:
             x = block(x)
             skips.append(x)
+            x = self.downsample(x)
 
         x = self.bottleneck(x)
         for block, skip in zip(self.decoder, reversed(skips), strict=True):

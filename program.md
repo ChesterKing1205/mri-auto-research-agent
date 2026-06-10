@@ -184,6 +184,8 @@ timeout 30m uv run train.py > run.log 2>&1
 run_status=$?
 ```
 
+After starting `train.py`, remain silent until the command exits. Do not narrate polling, waiting, background terminal status, timeout progress, or repeated "still running" updates. Do not call no-op helpers just to report that training is still active. When the command finishes, parse metrics and continue the loop.
+
 Read metrics with:
 
 ```bash
@@ -249,7 +251,7 @@ LOOP FOREVER:
 
 3. Start one new trial from the current best state. Save `start_commit=$(git rev-parse HEAD)`. Make one research change under `mri_recon_project/` only. Commit before running with `git add mri_recon_project/` and `git commit -m "Trial: <short attempt description>"`. Do not commit `results.tsv`, `run.log`, `manifests/`, `outputs/`, `.venv/`, `__pycache__/`, or `.pytest_cache/`.
 
-4. Run the trial with `timeout 30m uv run train.py > run.log 2>&1`, save `run_status=$?`, and parse metrics using `grep -E "^(primary_metric|psnr|ssim|nmse|val_loss):" run.log`.
+4. Run the trial with `timeout 30m uv run train.py > run.log 2>&1`, save `run_status=$?`, remain silent while training runs, and parse metrics using `grep -E "^(primary_metric|psnr|ssim|nmse|val_loss):" run.log` only after the command exits.
 
 5. Decide the result. Compare trial PSNR against the best PSNR in `results.tsv`, not merely the previous row. If PSNR improves, append one row with `decision=keep`, set `effective=yes`, and keep the trial commit as the new best research state. If PSNR is equal or worse, append one row with `decision=discard`, set `effective=no`, restore research code to `start_commit`, and immediately continue.
 
