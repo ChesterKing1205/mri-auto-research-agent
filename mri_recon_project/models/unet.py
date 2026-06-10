@@ -5,15 +5,15 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
-class ConvBlock(nn.Module):
+class ResidualBlock(nn.Module):
     def __init__(
         self,
         in_channels: int,
         out_channels: int,
         *,
         num_layers: int = 2,
-        activation: str = "leaky_relu",
-        normalization: str = "instance",
+        activation: str = "silu",
+        normalization: str = "group",
     ) -> None:
         super().__init__()
         if num_layers < 1:
@@ -28,36 +28,40 @@ class ConvBlock(nn.Module):
                 layers.append(norm)
             layers.append(_make_activation(activation))
         self.net = nn.Sequential(*layers)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return self.net(x)
-
-
-class UpBlock(nn.Module):
-    def __init__(
-        self,
-        in_channels: int,
-        skip_channels: int,
-        out_channels: int,
-        *,
-        conv_layers: int,
-        activation: str,
-        normalization: str,
-        upsample_mode: str,
-    ) -> None:
-        super().__init__()
-        self.up = _make_upsample(upsample_mode, in_channels, out_channels)
-        self.block = ConvBlock(
-            out_channels + skip_channels,
-            out_channels,
-            num_layers=conv_layers,
-            activation=activation,
-            normalization=normalization,
+        self.skip = (
+            nn.Conv2d(in_channels, out_channels, kernel_size=1)
+            if in_channels != out_channels
+            else nn.Identity()
         )
 
-    def forward(self, x: torch.Tensor, skip: torch.Tensor) -> torch.Tensor:
-        x = _match_size(self.up(x), skip)
-        return self.block(torch.cat([x, skip], dim=1))
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.net(x) + self.skip(x)
+
+
+class Downsample(nn.Module):
+    def __init__(self, channels: int) -> None:
+        super().__init__()
+        self.op = nn.Conv2d(channels, channels, kernel_size=4, stride=2, padding=1)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.op(x)
+
+
+class Upsample(nn.Module):
+    def __init__(self, channels: int, mode: str) -> None:
+        super().__init__()
+        if mode == "transpose":
+            self.op = nn.ConvTranspose2d(channels, channels, kernel_size=4, stride=2, padding=1)
+        elif mode == "bilinear":
+            self.op = nn.Sequential(
+                nn.Upsample(scale_factor=2, mode="bilinear", align_corners=False),
+                nn.Conv2d(channels, channels, kernel_size=3, padding=1),
+            )
+        else:
+            raise ValueError(f"Unsupported upsample_mode: {mode}")
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.op(x)
 
 
 class SmallUNet(nn.Module):
@@ -67,90 +71,105 @@ class SmallUNet(nn.Module):
         out_channels: int = 2,
         base_channels: int = 16,
         *,
-        depth: int = 3,
-        channel_multiplier: int = 2,
+        channel_multipliers: tuple[int, ...] = (1, 2, 4),
         conv_layers_per_block: int = 2,
-        activation: str = "leaky_relu",
-        normalization: str = "instance",
+        activation: str = "silu",
+        normalization: str = "group",
         upsample_mode: str = "transpose",
     ) -> None:
         super().__init__()
-        if depth < 1:
-            raise ValueError("depth must be >= 1")
         if base_channels < 1:
             raise ValueError("base_channels must be positive")
-        if channel_multiplier < 1:
-            raise ValueError("channel_multiplier must be positive")
+        if not channel_multipliers:
+            raise ValueError("channel_multipliers must not be empty")
+        if any(multiplier < 1 for multiplier in channel_multipliers):
+            raise ValueError("channel_multipliers must be positive")
 
-        encoder_channels = [base_channels * (channel_multiplier**level) for level in range(depth)]
-        bottleneck_channels = base_channels * (channel_multiplier**depth)
-        self.downsample = nn.MaxPool2d(2)
-        self.encoder = nn.ModuleList(
-            [
-                ConvBlock(
-                    in_channels if level == 0 else encoder_channels[level - 1],
-                    encoder_channels[level],
+        channels = [base_channels * multiplier for multiplier in channel_multipliers]
+        self.in_conv = nn.Conv2d(in_channels, channels[0], kernel_size=3, padding=1)
+
+        self.down_blocks = nn.ModuleList()
+        self.downs = nn.ModuleList()
+        prev_channels = channels[0]
+        for idx, channels_at_level in enumerate(channels):
+            self.down_blocks.append(
+                ResidualBlock(
+                    prev_channels,
+                    channels_at_level,
                     num_layers=conv_layers_per_block,
                     activation=activation,
                     normalization=normalization,
                 )
-                for level in range(depth)
-            ]
-        )
-        self.bottleneck = ConvBlock(
-            encoder_channels[-1],
-            bottleneck_channels,
+            )
+            is_last_level = idx == len(channels) - 1
+            self.downs.append(nn.Identity() if is_last_level else Downsample(channels_at_level))
+            prev_channels = channels_at_level
+
+        self.mid = ResidualBlock(
+            channels[-1],
+            channels[-1],
             num_layers=conv_layers_per_block,
             activation=activation,
             normalization=normalization,
         )
-        decoder_in_channels = [bottleneck_channels, *reversed(encoder_channels[1:])]
-        self.decoder = nn.ModuleList(
-            [
-                UpBlock(
-                    decoder_in,
+
+        self.ups = nn.ModuleList()
+        self.up_blocks = nn.ModuleList()
+        reversed_channels = list(reversed(channels))
+        prev_channels = reversed_channels[0]
+        for idx, skip_channels in enumerate(reversed_channels):
+            self.ups.append(nn.Identity() if idx == 0 else Upsample(prev_channels, upsample_mode))
+            self.up_blocks.append(
+                ResidualBlock(
+                    prev_channels + skip_channels,
                     skip_channels,
-                    skip_channels,
-                    conv_layers=conv_layers_per_block,
+                    num_layers=conv_layers_per_block,
                     activation=activation,
                     normalization=normalization,
-                    upsample_mode=upsample_mode,
                 )
-                for decoder_in, skip_channels in zip(
-                    decoder_in_channels,
-                    reversed(encoder_channels),
-                    strict=True,
-                )
-            ]
+            )
+            prev_channels = skip_channels
+
+        self.out = nn.Sequential(
+            _make_normalization(normalization, channels[0]) or nn.Identity(),
+            _make_activation(activation),
+            nn.Conv2d(channels[0], out_channels, kernel_size=3, padding=1),
         )
-        self.out = nn.Conv2d(encoder_channels[0], out_channels, kernel_size=1)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x = self.in_conv(x)
         skips = []
-        for block in self.encoder:
+        for block, down in zip(self.down_blocks, self.downs, strict=True):
             x = block(x)
             skips.append(x)
-            x = self.downsample(x)
+            x = down(x)
 
-        x = self.bottleneck(x)
-        for block, skip in zip(self.decoder, reversed(skips), strict=True):
-            x = block(x, skip)
+        x = self.mid(x)
+
+        for up, block in zip(self.ups, self.up_blocks, strict=True):
+            x = up(x)
+            skip = skips.pop()
+            if x.shape[-2:] != skip.shape[-2:]:
+                x = F.interpolate(x, size=skip.shape[-2:], mode="nearest")
+            x = block(torch.cat([x, skip], dim=1))
         return self.out(x)
 
 
 def _make_activation(name: str) -> nn.Module:
+    if name == "silu":
+        return nn.SiLU()
     if name == "leaky_relu":
         return nn.LeakyReLU(negative_slope=0.1, inplace=True)
     if name == "relu":
         return nn.ReLU(inplace=True)
-    if name == "silu":
-        return nn.SiLU(inplace=True)
     if name == "gelu":
         return nn.GELU()
     raise ValueError(f"Unsupported activation: {name}")
 
 
 def _make_normalization(name: str, channels: int) -> nn.Module | None:
+    if name == "group":
+        return nn.GroupNorm(_group_count(channels), channels)
     if name == "instance":
         return nn.InstanceNorm2d(channels, affine=True)
     if name == "batch":
@@ -160,18 +179,8 @@ def _make_normalization(name: str, channels: int) -> nn.Module | None:
     raise ValueError(f"Unsupported normalization: {name}")
 
 
-def _make_upsample(name: str, in_channels: int, out_channels: int) -> nn.Module:
-    if name == "transpose":
-        return nn.ConvTranspose2d(in_channels, out_channels, kernel_size=2, stride=2)
-    if name == "bilinear":
-        return nn.Sequential(
-            nn.Upsample(scale_factor=2, mode="bilinear", align_corners=False),
-            nn.Conv2d(in_channels, out_channels, kernel_size=1),
-        )
-    raise ValueError(f"Unsupported upsample_mode: {name}")
-
-
-def _match_size(x: torch.Tensor, reference: torch.Tensor) -> torch.Tensor:
-    if x.shape[-2:] == reference.shape[-2:]:
-        return x
-    return F.interpolate(x, size=reference.shape[-2:], mode="bilinear", align_corners=False)
+def _group_count(channels: int) -> int:
+    for groups in (8, 4, 2):
+        if channels % groups == 0:
+            return groups
+    return 1
