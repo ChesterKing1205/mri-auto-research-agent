@@ -39,10 +39,9 @@ def test_dataset_reads_required_fields_without_cache(tmp_path):
         acceleration=4,
         center_fraction=0.08,
         acs=24,
-        seed=1,
     )
     train_manifest, _ = write_manifests(config, tmp_path / "manifests")
-    sample = FastMRISliceDataset(train_manifest, config)[0]
+    sample = FastMRISliceDataset(train_manifest, config, seed=1)[0]
     assert sample["masked_kspace"].shape[-1] == 2
     assert sample["full_kspace"].shape[-3:-1] == (320, 320)
     assert sample["mask"].shape == (1, 1, 320, 1)
@@ -73,10 +72,9 @@ def test_zero_filled_image_is_reconstructed_from_masked_kspace(tmp_path):
         acceleration=4,
         center_fraction=0.08,
         acs=24,
-        seed=1,
     )
     train_manifest, _ = write_manifests(config, tmp_path / "manifests")
-    sample = FastMRISliceDataset(train_manifest, config)[0]
+    sample = FastMRISliceDataset(train_manifest, config, seed=1)[0]
 
     masked_batch = sample["masked_kspace"].unsqueeze(0)
     mask_batch = sample["mask"].unsqueeze(0)
@@ -110,10 +108,9 @@ def test_target_image_comes_from_reconstruction_rss_not_sens_reduce(tmp_path):
         acceleration=4,
         center_fraction=0.08,
         acs=24,
-        seed=1,
     )
     train_manifest, _ = write_manifests(config, tmp_path / "manifests")
-    sample = FastMRISliceDataset(train_manifest, config)[0]
+    sample = FastMRISliceDataset(train_manifest, config, seed=1)[0]
 
     sens_target = complex_abs(sample["target_complex"].unsqueeze(0)).squeeze(0)
     assert not torch.allclose(sample["target_image"], sens_target)
@@ -137,10 +134,9 @@ def test_mask_marks_sampled_kspace_positions(tmp_path):
         acceleration=4,
         center_fraction=0.08,
         acs=24,
-        seed=1,
     )
     train_manifest, _ = write_manifests(config, tmp_path / "manifests")
-    sample = FastMRISliceDataset(train_manifest, config)[0]
+    sample = FastMRISliceDataset(train_manifest, config, seed=1)[0]
 
     assert set(torch.unique(sample["mask"]).tolist()) <= {0.0, 1.0}
     assert torch.allclose(sample["masked_kspace"], sample["full_kspace"] * sample["mask"])

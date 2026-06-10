@@ -16,7 +16,6 @@ class ProgramConfig:
     acceleration: int
     center_fraction: float
     acs: int
-    seed: int
     num_workers: int = 0
 
 
@@ -30,7 +29,6 @@ DEFAULTS = {
     "acceleration": "4",
     "center_fraction": "0.08",
     "acs": "24",
-    "seed": "1337",
 }
 
 
@@ -55,7 +53,6 @@ def load_program_config(path: str | Path) -> ProgramConfig:
         acceleration=int(_extract_value(text, "acceleration")),
         center_fraction=float(_extract_value(text, "center_fraction")),
         acs=int(_extract_value(text, "acs")),
-        seed=int(_extract_value(text, "seed")),
     )
     _validate_config(config)
     return config

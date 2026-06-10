@@ -22,9 +22,10 @@ from mri_recon_harness.physics import (
 
 
 class FastMRISliceDataset(Dataset):
-    def __init__(self, manifest_path: str | Path, config: ProgramConfig) -> None:
+    def __init__(self, manifest_path: str | Path, config: ProgramConfig, seed: int) -> None:
         self.rows = read_manifest(manifest_path)
         self.config = config
+        self.seed = seed
         unique_paths = sorted({file_path for file_path, _ in self.rows})
         self.file_indices = {file_path: file_idx for file_idx, file_path in enumerate(unique_paths)}
 
@@ -49,7 +50,7 @@ class FastMRISliceDataset(Dataset):
         width = kspace.shape[-2]
         total_samples = round(width / self.config.acceleration)
         file_idx = self.file_indices[file_path]
-        mask = make_gaussian_mask(width, total_samples, self.config.acs, seed=self.config.seed + file_idx)
+        mask = make_gaussian_mask(width, total_samples, self.config.acs, seed=self.seed + file_idx)
         mask = mask.to(dtype=kspace.dtype, device=kspace.device)
         masked_kspace = kspace * mask
 
@@ -97,16 +98,17 @@ def _collate(batch: list[dict[str, Any]]) -> dict[str, Any]:
 
 
 class FastMRIDataModule(pl.LightningDataModule):
-    def __init__(self, config: ProgramConfig, manifest_dir: str | Path = "manifests") -> None:
+    def __init__(self, config: ProgramConfig, seed: int, manifest_dir: str | Path = "manifests") -> None:
         super().__init__()
         self.config = config
+        self.seed = seed
         self.manifest_dir = Path(manifest_dir)
         self.train_dataset: FastMRISliceDataset | None = None
         self.val_dataset: FastMRISliceDataset | None = None
 
     def setup(self, stage: str | None = None) -> None:
-        self.train_dataset = FastMRISliceDataset(self.manifest_dir / "train_manifest.tsv", self.config)
-        self.val_dataset = FastMRISliceDataset(self.manifest_dir / "val_manifest.tsv", self.config)
+        self.train_dataset = FastMRISliceDataset(self.manifest_dir / "train_manifest.tsv", self.config, self.seed)
+        self.val_dataset = FastMRISliceDataset(self.manifest_dir / "val_manifest.tsv", self.config, self.seed)
 
     def train_dataloader(self) -> DataLoader:
         if self.train_dataset is None:

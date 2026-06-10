@@ -6,8 +6,10 @@ from mri_recon_harness.config import ProgramConfig
 from mri_recon_harness import runner
 
 
-def test_runner_seeds_lightning_from_program_config(monkeypatch, tmp_path):
+def test_runner_seeds_lightning_from_project_config(monkeypatch, tmp_path):
     calls: list[tuple[int, bool]] = []
+    datamodule_seeds: list[int] = []
+    module_configs: list[dict] = []
 
     def fake_seed_everything(seed: int, workers: bool = False):
         calls.append((seed, workers))
@@ -38,9 +40,14 @@ def test_runner_seeds_lightning_from_program_config(monkeypatch, tmp_path):
 
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(runner.pl, "seed_everything", fake_seed_everything)
+    monkeypatch.setattr(runner, "merge_project_config", lambda config=None: {"seed": 1234})
     monkeypatch.setattr(runner, "write_manifests", lambda config: None)
-    monkeypatch.setattr(runner, "FastMRIDataModule", lambda config: object())
-    monkeypatch.setattr(runner, "HarnessLightningModule", lambda: object())
+    monkeypatch.setattr(runner, "FastMRIDataModule", lambda config, seed: datamodule_seeds.append(seed) or object())
+    monkeypatch.setattr(
+        runner,
+        "HarnessLightningModule",
+        lambda project_config: module_configs.append(project_config) or object(),
+    )
     monkeypatch.setattr(runner, "TensorBoardLogger", FakeLogger)
     monkeypatch.setattr(runner, "ModelCheckpoint", FakeCheckpoint)
     monkeypatch.setattr(runner.pl, "Trainer", FakeTrainer)
@@ -55,12 +62,13 @@ def test_runner_seeds_lightning_from_program_config(monkeypatch, tmp_path):
         acceleration=4,
         center_fraction=0.08,
         acs=24,
-        seed=1234,
     )
 
     runner.run_experiment(config)
 
     assert calls == [(1234, True)]
+    assert datamodule_seeds == [1234]
+    assert module_configs == [{"seed": 1234}]
 
 
 class _Metric:

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 
 DEFAULT_PROJECT_CONFIG = {
+    "seed": 1337,
     "in_channels": 2,
     "out_channels": 2,
     "base_channels": 16,

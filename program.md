@@ -93,7 +93,6 @@ max_minutes_per_round: 15
 acceleration: 4
 center_fraction: 0.08
 acs: 24
-seed: 1337
 ```
 
 The data layout is:
@@ -166,7 +165,7 @@ full_kspace
 
 These fields may be used for training losses and diagnostics, but not to construct validation predictions.
 
-What you CAN do: Modify `mri_recon_project/` — this is the only directory you edit during research. Within that boundary, everything is fair game: model architecture, residual/image-domain prediction logic, k-space data consistency using provided batch fields, losses, optimizer, scheduler, normalization, `train_batch`, validation-time inference, internal helper modules, hyperparameters, model size, etc. You can use harness-provided tensors such as undersampled k-space, masks, sensitivity maps, zero-filled complex images, and normalized targets according to the public project API, as long as validation predictions do not use ground truth.
+What you CAN do: Modify `mri_recon_project/` — this is the only directory you edit during research. Within that boundary, everything is fair game: model architecture, residual/image-domain prediction logic, k-space data consistency using provided batch fields, losses, optimizer, scheduler, normalization, `train_batch`, validation-time inference, internal helper modules, hyperparameters including seed, model size, etc. You can use harness-provided tensors such as undersampled k-space, masks, sensitivity maps, zero-filled complex images, and normalized targets according to the public project API, as long as validation predictions do not use ground truth.
 
 What you CANNOT do: You cannot change the dataset split, experiment budget, metric implementation, harness, `train.py`, `prepare.py`, dependencies, lockfiles, tests, or this `program.md` during the research loop. You cannot create image caches, commit generated files, use validation targets as prediction inputs, leak `target_image`, `target_complex`, or `full_kspace` into validation predictions, or increase compute to make results non-comparable. The harness is the judge; do not move the goalposts.
 

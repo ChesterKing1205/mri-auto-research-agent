@@ -36,7 +36,6 @@ batch_size: 1
 max_minutes_per_round: 15
 acceleration: 4
 center_fraction: 0.08
-seed: 123
 """,
         encoding="utf-8",
     )

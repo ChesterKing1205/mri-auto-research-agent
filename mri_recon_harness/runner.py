@@ -12,6 +12,7 @@ from mri_recon_harness.config import ProgramConfig
 from mri_recon_harness.datamodule import FastMRIDataModule
 from mri_recon_harness.lightning_module import HarnessLightningModule
 from mri_recon_harness.manifest import write_manifests
+from mri_recon_project.config import merge_project_config
 
 
 class ValidationMetricLog(Callback):
@@ -38,13 +39,15 @@ class ValidationMetricLog(Callback):
 
 
 def run_experiment(config: ProgramConfig) -> dict[str, Any]:
-    pl.seed_everything(config.seed, workers=True)
+    project_config = merge_project_config(None)
+    seed = int(project_config["seed"])
+    pl.seed_everything(seed, workers=True)
 
     if not Path("manifests/train_manifest.tsv").exists() or not Path("manifests/val_manifest.tsv").exists():
         write_manifests(config)
 
-    datamodule = FastMRIDataModule(config)
-    module = HarnessLightningModule()
+    datamodule = FastMRIDataModule(config, seed)
+    module = HarnessLightningModule(project_config)
     logger = TensorBoardLogger("outputs", name="")
     output_dir = Path(logger.log_dir)
     checkpoint_dir = output_dir / "checkpoint"
