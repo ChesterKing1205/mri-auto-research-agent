@@ -12,8 +12,8 @@ class ResidualBlock(nn.Module):
         out_channels: int,
         *,
         num_layers: int = 2,
-        activation: str = "silu",
-        normalization: str = "group",
+        activation: str = "leaky_relu",
+        normalization: str = "instance",
     ) -> None:
         super().__init__()
         if num_layers < 1:
@@ -71,21 +71,22 @@ class SmallUNet(nn.Module):
         out_channels: int = 2,
         base_channels: int = 16,
         *,
-        channel_multipliers: tuple[int, ...] = (1, 2, 4),
+        depth: int = 3,
+        channel_multiplier: int = 2,
         conv_layers_per_block: int = 2,
-        activation: str = "silu",
-        normalization: str = "group",
+        activation: str = "leaky_relu",
+        normalization: str = "instance",
         upsample_mode: str = "transpose",
     ) -> None:
         super().__init__()
+        if depth < 1:
+            raise ValueError("depth must be >= 1")
         if base_channels < 1:
             raise ValueError("base_channels must be positive")
-        if not channel_multipliers:
-            raise ValueError("channel_multipliers must not be empty")
-        if any(multiplier < 1 for multiplier in channel_multipliers):
-            raise ValueError("channel_multipliers must be positive")
+        if channel_multiplier < 1:
+            raise ValueError("channel_multiplier must be positive")
 
-        channels = [base_channels * multiplier for multiplier in channel_multipliers]
+        channels = [base_channels * (channel_multiplier**level) for level in range(depth)]
         self.in_conv = nn.Conv2d(in_channels, channels[0], kernel_size=3, padding=1)
 
         self.down_blocks = nn.ModuleList()

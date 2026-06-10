@@ -19,7 +19,8 @@ class ResearchModule(nn.Module):
             in_channels=int(self.config["in_channels"]),
             out_channels=int(self.config["out_channels"]),
             base_channels=int(self.config["base_channels"]),
-            channel_multipliers=_int_tuple(self.config["channel_multipliers"]),
+            depth=int(self.config["unet_depth"]),
+            channel_multiplier=int(self.config["channel_multiplier"]),
             conv_layers_per_block=int(self.config["conv_layers_per_block"]),
             activation=str(self.config["activation"]),
             normalization=str(self.config["normalization"]),
@@ -73,12 +74,6 @@ def _channels_to_complex(channels: torch.Tensor) -> torch.Tensor:
 
 def _complex_magnitude(image: torch.Tensor) -> torch.Tensor:
     return torch.sqrt(image.square().sum(dim=-1).clamp_min(0))
-
-
-def _int_tuple(value: Any) -> tuple[int, ...]:
-    if isinstance(value, str):
-        return tuple(int(item.strip()) for item in value.split(",") if item.strip())
-    return tuple(int(item) for item in value)
 
 
 def build_research_module(config: dict[str, Any] | None = None) -> ResearchModule:
