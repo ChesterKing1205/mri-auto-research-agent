@@ -87,7 +87,7 @@ The fixed experiment is defined by:
 fastMRI_root: /mnt/d/fastmri/brain/T1
 train_files: 10
 val_files: 3
-epochs_per_round: 20
+epochs_per_round: 10
 batch_size: 1
 max_minutes_per_round: 15
 acceleration: 4
@@ -182,7 +182,18 @@ timeout 30m uv run train.py > run.log 2>&1
 run_status=$?
 ```
 
-After starting `train.py`, remain silent until the command exits. Do not narrate polling, waiting, background terminal status, timeout progress, or repeated "still running" updates. Do not call no-op helpers just to report that training is still active. When the command finishes, parse metrics and continue the loop.
+After starting `train.py`, enter a pure wait state until the command exits.
+
+While training is running:
+- Do not think through new ideas.
+- Do not inspect files.
+- Do not read logs.
+- Do not summarize progress.
+- Do not plan the next trial.
+- Do not start another command or process.
+- Do not call tools except the minimal wait/poll needed to detect that the existing training process has completed.
+
+Your only task during training is to monitor whether the running training command has finished. After it exits, read `run_status`, parse metrics from `run.log`, and continue the loop.
 
 Read metrics with:
 
@@ -245,11 +256,11 @@ LOOP FOREVER:
 
 1. Reconcile state before doing anything else. Run `git branch --show-current` and `git status --short`. The branch must start with `autoresearch/`, and only ignored local artifacts may be present. Find the best recorded commit in `results.tsv`: the highest PSNR row whose `decision` is `baseline` or `keep`. If `HEAD` is an unresolved trial, resolve it before making a new edit: parse complete metrics from `run.log` if present; otherwise, if no training process is running, record it as `crash`. If a newer docs-only rule commit such as `program.md` exists, preserve it while restoring only `mri_recon_project/` to the best recorded research state.
 
-2. Record the baseline if needed. If `results.tsv` does not exist, create it with the header. If no baseline row exists, run `uv run prepare.py`, then `timeout 30m uv run train.py > run.log 2>&1`, parse the metric lines, and record `decision=baseline`, `effective=yes`, and `trial_commit=start_commit`. If the baseline cannot run or metrics cannot be parsed, this is a setup failure; inspect `tail -n 80 run.log`, report the issue, and stop.
+2. Record the baseline if needed. If `results.tsv` does not exist, create it with the header. If no baseline row exists, run `uv run prepare.py`, then `timeout 30m uv run train.py > run.log 2>&1`. While training runs, use the pure wait state from the Output Format section. After the command exits, parse the metric lines and record `decision=baseline`, `effective=yes`, and `trial_commit=start_commit`. If the baseline cannot run or metrics cannot be parsed, this is a setup failure; inspect `tail -n 80 run.log`, report the issue, and stop.
 
 3. Start one new trial from the current best state. Save `start_commit=$(git rev-parse HEAD)`. Make one research change under `mri_recon_project/` only. Commit before running with `git add mri_recon_project/` and `git commit -m "Trial: <short attempt description>"`. Do not commit `results.tsv`, `run.log`, `manifests/`, `outputs/`, `.venv/`, `__pycache__/`, or `.pytest_cache/`.
 
-4. Run the trial with `timeout 30m uv run train.py > run.log 2>&1`, save `run_status=$?`, remain silent while training runs, and parse metrics using `grep -E "^(primary_metric|psnr|ssim|nmse|val_loss):" run.log` only after the command exits.
+4. Run the trial with `timeout 30m uv run train.py > run.log 2>&1` and save `run_status=$?`. While training runs, use the pure wait state from the Output Format section: do not reason, inspect, summarize, plan, or call tools except the minimal wait/poll needed to detect completion. After the command exits, parse metrics using `grep -E "^(primary_metric|psnr|ssim|nmse|val_loss):" run.log`.
 
 5. Decide the result. Compare trial PSNR against the best PSNR in `results.tsv`, not merely the previous row. If PSNR improves, append one row with `decision=keep`, set `effective=yes`, and keep the trial commit as the new best research state. If PSNR is equal or worse, append one row with `decision=discard`, set `effective=no`, restore research code to `start_commit`, and immediately continue.
 
