@@ -6,20 +6,20 @@ Your job is to repeatedly modify the research code, run the fixed experiment, ke
 
 ## Setup
 
-Work in this repository on the local branch:
+Work only on a local autoresearch branch, for example:
 
 ```bash
 autoresearch/mri-recon-psnr
 ```
 
-Before starting or resuming:
+Before starting or resuming, always check:
 
 ```bash
 git branch --show-current
 git status --short
 ```
 
-Only ignored local artifacts may be present:
+Expected untracked or ignored local artifacts may include:
 
 ```text
 results.tsv
@@ -33,7 +33,7 @@ __pycache__/
 
 If the current branch is not an `autoresearch/` branch, stop. Never run `git reset --hard` on `main`.
 
-Read these before proposing a trial:
+Read these before proposing or resuming a trial:
 
 ```text
 program.md
@@ -41,7 +41,7 @@ README.md
 mri_recon_project/
 ```
 
-Prepare deterministic manifests if missing:
+Prepare deterministic manifests if needed:
 
 ```bash
 uv run prepare.py
@@ -63,7 +63,7 @@ gh repo create
 
 ## Experimentation
 
-The goal is simple: maximize validation PSNR.
+The goal is simple: maximize validation PSNR on the fixed benchmark by improving only the editable research surface in `mri_recon_project/`. Operate strictly within the allowed capability range: you may improve the model, loss, optimizer, scheduler, normalization, hyperparameters, and inference logic inside `mri_recon_project/`, but you must not change the benchmark, harness, data split, metrics, frozen files, or any other evaluation rule to make results look better.
 
 Primary metric:
 
@@ -87,7 +87,7 @@ The fixed experiment is defined by:
 fastMRI_root: /mnt/d/fastmri/brain/T1
 train_files: 10
 val_files: 3
-epochs_per_round: 10
+epochs_per_round: 20
 batch_size: 1
 max_minutes_per_round: 15
 acceleration: 4
@@ -169,9 +169,7 @@ What you CAN do: Modify `mri_recon_project/` — this is the only directory you 
 
 What you CANNOT do: You cannot change the dataset split, experiment budget, metric implementation, harness, `train.py`, `prepare.py`, dependencies, lockfiles, tests, or this `program.md` during the research loop. You cannot create image caches, commit generated files, use validation targets as prediction inputs, leak `target_image`, `target_complex`, or `full_kspace` into validation predictions, or increase compute to make results non-comparable. The harness is the judge; do not move the goalposts.
 
-The goal is simple: maximize validation PSNR on the fixed validation subset. Compare every trial against the best PSNR already recorded in `results.tsv`, not merely the previous row. SSIM, NMSE, and validation loss are useful diagnostics, but they do not override PSNR. A trial with worse PSNR is normally discarded even if an auxiliary metric improves.
-
-Simplicity criterion: prefer the simplest change that improves PSNR. A small gain from brittle, hard-to-explain code is usually not worth keeping. If two trials are effectively tied, keep the simpler and more robust one. Change one idea per trial; do not bundle unrelated model, loss, optimizer, and inference changes unless the combined change is the idea being tested.
+Simplicity criterion: prefer the simplest change that improves PSNR. Keep the implementation compact, local, readable, and easy to reason about. Avoid speculative abstractions, broad refactors, or brittle complexity that does not clearly earn its keep in validation PSNR. If two approaches are effectively tied, keep the simpler and more robust one.
 
 The first run: before any research edit, run the unmodified baseline through the fixed command path and record it in `results.tsv` with `decision=baseline` and `effective=yes`. This baseline establishes the score all later trials must beat. If the baseline cannot run or metrics cannot be parsed, treat it as setup failure, report it, and do not edit research code to bypass the failure.
 
