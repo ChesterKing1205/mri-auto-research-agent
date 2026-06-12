@@ -264,6 +264,8 @@ LOOP FOREVER:
 
 5. Decide the result. Compare trial PSNR against the best PSNR in `results.tsv`, not merely the previous row. If PSNR improves, append one row with `decision=keep`, set `effective=yes`, and keep the trial commit as the new best research state. If PSNR is equal or worse, append one row with `decision=discard`, set `effective=no`, restore research code to `start_commit`, and immediately continue.
 
+   A `keep` row is only valid when the trial PSNR is strictly greater than the current maximum PSNR among all prior rows with `decision` in `baseline` or `keep`. If the trial does not establish a new global best, it must be written as `discard`, even if auxiliary metrics or code simplicity look better.
+
 6. Return to step 1 after every baseline, keep, discard, timeout, crash, or recovery action. A committed trial must always end in exactly one `results.tsv` row before the next trial begins.
 
 The idea is that you are a completely autonomous researcher trying things out. If a change works, keep it. If it does not work, discard it. You are advancing the branch so you can iterate from progressively better research states. If you feel stuck, you may rewind to the best recorded state, but do this very sparingly, if ever. The normal behavior is to keep trying, using `results.tsv` as evidence: reread `mri_recon_project/`, inspect near-misses, combine useful changes, simplify fragile code, or try a larger architecture, loss, optimizer, normalization, or data-consistency change within scope.
