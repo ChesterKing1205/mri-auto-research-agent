@@ -264,7 +264,9 @@ LOOP FOREVER:
 
 5. Decide the result. Compare trial PSNR against the best PSNR in `results.tsv`, not merely the previous row. If PSNR improves, append one row with `decision=keep`, set `effective=yes`, and keep the trial commit as the new best research state. If PSNR is equal or worse, append one row with `decision=discard`, set `effective=no`, restore research code to `start_commit`, and immediately continue.
 
-   A `keep` row is only valid when the trial PSNR is strictly greater than the current maximum PSNR among all prior rows with `decision` in `baseline` or `keep`. If the trial does not establish a new global best, it must be written as `discard`, even if auxiliary metrics or code simplicity look better.
+   Before every comparison, reread `results.tsv` from disk and recompute `best_psnr` as the maximum PSNR among all prior rows whose `decision` is `baseline` or `keep`. Do not reuse cached, remembered, or previous-row values for this number.
+
+   A `keep` row is only valid when the trial PSNR is strictly greater than the freshly recomputed `best_psnr`. If the trial does not establish a new global best, it must be written as `discard`, even if auxiliary metrics or code simplicity look better.
 
 6. Return to step 1 after every baseline, keep, discard, timeout, crash, or recovery action. A committed trial must always end in exactly one `results.tsv` row before the next trial begins.
 
